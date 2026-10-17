@@ -41,3 +41,6 @@ Add an object to `sites.json` (`slug`, `name`, `url`, `status`, `tagline`, `stat
 - Confirm hello@babarali.com is a working mailbox (set in `assets/js/config.js`, with matching fallbacks in the HTML).
 - Add Bobo's photo as `assets/img/bobo.jpg` (a placeholder shows until then).
 - Have the Privacy Policy and Terms reviewed.
+
+## Cache busting
+Assets are cached for up to an hour (see `.htaccess`). Their links carry `?v=N`. When you change any CSS or JS, bump `N` in the HTML files so visitors get the new version right away.
