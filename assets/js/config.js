@@ -7,5 +7,7 @@ window.BOBO_CONFIG = {
   cookieDomain: ".bobolearns.com",
   rootHost: "bobolearns.com",
   contactEmail: "hello@babarali.com",
+  // Flip apple to true once Sign in with Apple is configured in Supabase (needs an Apple Developer account).
+  providers: { google: true, apple: false },
   creator: { name: "Babar Ali", url: "https://babarali.com" }
 };

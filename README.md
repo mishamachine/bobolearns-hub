@@ -24,23 +24,17 @@ Live at https://bobolearns.com. Static site (HTML/CSS/JS, no build step) that li
 4. Optional: run `supabase/hub.sql` so Chess (and future sites) can log activity.
 
 ## Single sign-on across sites
-The hub stores the session in a cookie on `.bobolearns.com`. For Lingo and Chess to share it, load the same three files and use the shared client instead of creating their own:
+Lingo and Chess already store their Supabase session in a cookie on `.bobolearns.com` (`src/lib/cookieStorage.ts`). The hub's `assets/js/bobo-auth.js` uses the identical cookie format and the default Supabase storage key, so one login works on all three. **Keep these in sync:** if you change the cookie logic in one place, change it everywhere.
 
-```html
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://bobolearns.com/assets/js/config.js"></script>
-<script src="https://bobolearns.com/assets/js/bobo-auth.js"></script>
-<script>const supabase = window.boboAuth.client;</script>
-```
-For a login screen, send signed-out users to `https://bobolearns.com/login/?next=<their site URL>`; only `*.bobolearns.com` destinations are honored.
+To send a signed-out user from another site to the hub's login: `https://bobolearns.com/login/?next=<their site URL>`. Only `*.bobolearns.com` destinations are honored.
 
 ## Add a new site
 Add an object to `sites.json` (`slug`, `name`, `url`, `status`, `tagline`, `stats`, `lastActive`) and push. Stats are declarative (`count`, `sum`, `avg`, `distinct` over a Supabase table filtered to the user).
 
 ## Before launch checklist
 - Confirm hello@babarali.com is a working mailbox (set in `assets/js/config.js`, with matching fallbacks in the HTML).
-- Add Bobo's photo as `assets/img/bobo.jpg` (a placeholder shows until then).
+- Apple sign-in is hidden. Set `providers.apple` to `true` in `assets/js/config.js` after configuring it in Supabase.
 - Have the Privacy Policy and Terms reviewed.
 
 ## Cache busting
-Assets are cached for up to an hour (see `.htaccess`). Their links carry `?v=N`. When you change any CSS or JS, bump `N` in the HTML files so visitors get the new version right away.
+Assets are cached for up to an hour (see `.htaccess`). Their links carry `?v=N` (currently 3). When you change any CSS or JS, bump `N` in the HTML files so visitors get the new version right away.

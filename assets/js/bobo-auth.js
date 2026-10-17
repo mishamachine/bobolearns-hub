@@ -1,9 +1,10 @@
 /*
  * bobo-auth.js — shared BoboLearns login client.
  *
- * Drop this file (plus config.js and the supabase-js script) into ANY *.bobolearns.com site and
- * use `window.boboAuth.client` instead of creating your own Supabase client. The session is stored
- * in a cookie scoped to .bobolearns.com, so signing in on one site signs you in on all of them.
+ * The hub's login client. It reads and writes the SAME shared session cookie as Lingo and Chess
+ * (cookie scoped to .bobolearns.com, default Supabase storage key), so signing in on any BoboLearns
+ * site signs you in on all of them. Static sites can reuse this file; React apps already have the
+ * equivalent in src/lib/cookieStorage.ts.
  *
  * Requires: window.supabase (supabase-js v2 UMD) and window.BOBO_CONFIG.
  */
@@ -11,64 +12,63 @@
   "use strict";
 
   var cfg = window.BOBO_CONFIG;
-  var STORAGE_KEY = "bobo-auth";
-  var CHUNK = 3000; // stay well under the ~4KB per-cookie limit
-  var onRoot = location.hostname === cfg.rootHost || location.hostname.endsWith("." + cfg.rootHost);
+  var CHUNK = 3000; // encoded characters per cookie; browsers cap a cookie near 4 KB
+  var MAX_AGE = 60 * 60 * 24 * 365;
+  // Same rule as Lingo/Chess: shared cookies on *.bobolearns.com, localStorage anywhere else.
+  var useCookies = /(^|\.)bobolearns\.com$/.test(location.hostname);
 
-  function writeCookie(name, value, days) {
-    var parts = [name + "=" + value, "path=/", "max-age=" + Math.round(days * 86400), "SameSite=Lax"];
-    if (onRoot) { parts.push("Domain=" + cfg.cookieDomain, "Secure"); }
-    document.cookie = parts.join("; ");
+  function readCookies() {
+    var map = {};
+    (document.cookie ? document.cookie.split("; ") : []).forEach(function (part) {
+      var i = part.indexOf("=");
+      if (i > 0) { map[part.slice(0, i)] = part.slice(i + 1); }
+    });
+    return map;
   }
 
-  function readCookie(name) {
-    var prefix = name + "=";
-    var items = document.cookie ? document.cookie.split("; ") : [];
-    for (var i = 0; i < items.length; i++) {
-      if (items[i].indexOf(prefix) === 0) { return items[i].slice(prefix.length); }
-    }
-    return null;
+  function writeCookie(name, value, maxAge) {
+    document.cookie = name + "=" + value + "; Domain=" + cfg.cookieDomain + "; Path=/; Max-Age=" + maxAge + "; SameSite=Lax; Secure";
   }
 
-  // Cookie-backed storage adapter for supabase-js. Large values are split into chunks.
-  var cookieStorage = {
+  function clear(key) {
+    var cookies = readCookies();
+    Object.keys(cookies).forEach(function (name) {
+      if (name === key || name.indexOf(key + ".") === 0) { writeCookie(name, "", 0); }
+    });
+  }
+
+  // IMPORTANT: this adapter and the default Supabase storage key must stay byte-for-byte compatible
+  // with src/lib/cookieStorage.ts in the Lingo and Chess repos, or sessions will not be shared.
+  var sessionStorageAdapter = {
     getItem: function (key) {
-      var count = parseInt(readCookie(key + ".n"), 10);
-      if (!count) { return null; }
+      if (!useCookies) { return window.localStorage.getItem(key); }
+      var cookies = readCookies();
       var out = "";
-      for (var i = 0; i < count; i++) {
-        var part = readCookie(key + "." + i);
-        if (part === null) { return null; }
-        out += part;
+      for (var i = 0; ; i++) {
+        var chunk = cookies[key + "." + i];
+        if (chunk === undefined) { break; }
+        out += chunk;
       }
+      if (!out) { return null; }
       try { return decodeURIComponent(out); } catch (e) { return null; }
     },
     setItem: function (key, value) {
-      var enc = encodeURIComponent(value);
-      var prev = parseInt(readCookie(key + ".n"), 10) || 0;
-      var chunks = Math.max(1, Math.ceil(enc.length / CHUNK));
-      for (var i = 0; i < chunks; i++) {
-        writeCookie(key + "." + i, enc.slice(i * CHUNK, (i + 1) * CHUNK), 400);
+      if (!useCookies) { window.localStorage.setItem(key, value); return; }
+      clear(key);
+      var encoded = encodeURIComponent(value);
+      for (var i = 0, n = 0; i < encoded.length; i += CHUNK, n++) {
+        writeCookie(key + "." + n, encoded.slice(i, i + CHUNK), MAX_AGE);
       }
-      for (var j = chunks; j < prev; j++) { writeCookie(key + "." + j, "", 0); }
-      writeCookie(key + ".n", String(chunks), 400);
     },
     removeItem: function (key) {
-      var prev = parseInt(readCookie(key + ".n"), 10) || 0;
-      for (var i = 0; i < prev; i++) { writeCookie(key + "." + i, "", 0); }
-      writeCookie(key + ".n", "", 0);
+      if (!useCookies) { window.localStorage.removeItem(key); return; }
+      clear(key);
     }
   };
 
+  // Same options as Lingo: custom storage only (default storage key and default auth flow).
   var client = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey, {
-    auth: {
-      storage: cookieStorage,
-      storageKey: STORAGE_KEY,
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-      flowType: "pkce"
-    }
+    auth: { storage: sessionStorageAdapter }
   });
 
   // Only allow redirects to this hub or another *.bobolearns.com site (prevents open redirects).

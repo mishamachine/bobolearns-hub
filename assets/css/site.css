@@ -171,6 +171,8 @@ input:focus, select:focus { outline: 3px solid var(--blue); outline-offset: 0; }
 .bar.today i { background: var(--teal); }
 .bar.zero i { background: var(--cream); }
 .continue { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 18px; background: var(--yellow); margin-bottom: 28px; }
+.continue img { flex: none; border: var(--bd); background: var(--paper); border-radius: 50%; }
+.continue > div { flex: 1 1 220px; }
 .continue h2 { margin: 0; font-size: clamp(1.4rem, 3vw, 2rem); }
 .empty { text-align: center; padding: 36px 20px; }
 .skeleton { background: linear-gradient(90deg, #eee 25%, #f8f8f8 50%, #eee 75%); background-size: 200% 100%; animation: shimmer 1.2s infinite; color: transparent; }

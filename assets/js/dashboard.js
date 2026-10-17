@@ -151,14 +151,14 @@
     var cont = $("continue");
     if (top && top.last) {
       cont.hidden = false;
-      cont.innerHTML = '<div><p class="eyebrow">Pick up where you left off</p><h2>' + esc(top.site.name) +
+      cont.innerHTML = '<img src="/assets/img/bobo/bobo-cheer.svg" alt="" width="72" height="72"><div><p class="eyebrow">Pick up where you left off</p><h2>' + esc(top.site.name) +
         '</h2><p style="margin:0">Last active ' + esc(relTime(top.last)) + '.</p></div>' +
         '<a class="btn btn-red" href="' + esc(top.site.url) + '">Continue →</a>';
     } else {
       var first = items.filter(function (x) { return x.site.status === "live"; })[0];
       cont.hidden = !first;
       if (first) {
-        cont.innerHTML = '<div><p class="eyebrow">Welcome</p><h2>Start with ' + esc(first.site.name) +
+        cont.innerHTML = '<img src="/assets/img/bobo/bobo-happy.svg" alt="" width="72" height="72"><div><p class="eyebrow">Welcome</p><h2>Start with ' + esc(first.site.name) +
           '</h2><p style="margin:0">Your stats will show up here as soon as you finish a lesson.</p></div>' +
           '<a class="btn btn-red" href="' + esc(first.site.url) + '">Get started →</a>';
       }

@@ -9,6 +9,11 @@
   var dest = A.absolute(next);
 
   var $ = function (id) { return document.getElementById(id); };
+
+  // Hide sign-in providers that aren't switched on yet (see BOBO_CONFIG.providers).
+  document.querySelectorAll("[data-provider]").forEach(function (b) {
+    if (!window.BOBO_CONFIG.providers[b.getAttribute("data-provider")]) { b.hidden = true; }
+  });
   var mode = "signin";
 
   function msg(text, kind) {
