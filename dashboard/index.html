@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard — BoboLearns</title>
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#f6f1e7">
+  <link rel="icon" href="/assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/site.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="nav">
+    <div class="wrap nav-in">
+      <a class="brand" href="/"><span class="brand-mark">B</span><span>BoboLearns</span></a>
+      <nav class="nav-links" aria-label="Main">
+        <a href="/#sites">Sites</a>
+        <a class="btn btn-sm" id="navAuth" href="/dashboard/">Dashboard</a>
+        <button class="btn btn-sm btn-ghost" id="signout" type="button">Sign out</button>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main" class="dash">
+    <div class="wrap">
+      <div id="loading" aria-live="polite">
+        <div class="card skeleton" style="min-height:180px">Loading your stats…</div>
+      </div>
+
+      <div id="app" hidden>
+        <div class="dash-head">
+          <div>
+            <span class="eyebrow">Your dashboard</span>
+            <h1 id="hello">Hey.</h1>
+          </div>
+        </div>
+
+        <div class="card continue" id="continue" hidden></div>
+
+        <div class="stat-grid">
+          <div class="card">
+            <h3 class="k">Today</h3>
+            <div class="ring" id="ring"><div class="ring-in"><div><b id="ringNum">0</b><br><small>min</small></div></div></div>
+            <p id="goalLine" class="muted" style="text-align:center;margin:0;font-size:.9rem"></p>
+          </div>
+          <div class="card">
+            <h3 class="k">Streak</h3>
+            <div><span class="big" id="streak">0</span> <span id="streakUnit" style="font-weight:700;text-transform:uppercase">days</span></div>
+            <p id="streakNote" class="muted" style="margin:10px 0 0;font-size:.9rem"></p>
+          </div>
+          <div class="card">
+            <h3 class="k">Last 7 days · <span id="weekTotal">0 min this week</span></h3>
+            <div class="bars" id="bars" role="img" aria-label="Study minutes for each of the last seven days"></div>
+          </div>
+        </div>
+
+        <div class="sec-head" style="margin:40px 0 20px">
+          <h2 style="font-size:1.8rem">Your sites</h2>
+        </div>
+        <div class="grid grid-sites" id="sitesGrid"></div>
+
+        <div class="card flat account">
+          <div>
+            <h3 class="k" style="margin-bottom:4px">Account</h3>
+            <p style="margin:0"><span id="email"></span></p>
+          </div>
+          <div>
+            <label for="goalSel">Daily goal</label>
+            <select id="goalSel" aria-describedby="goalMsg"></select>
+            <p id="goalMsg" class="muted" style="font-size:.82rem;margin:6px 0 0" role="status"></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap footer-in">
+      <div>
+        <strong>BoboLearns</strong><br>
+        <span class="muted">© <span data-year>2026</span> · A project by <a href="https://babarali.com" rel="noopener">Babar Ali</a></span>
+      </div>
+      <nav class="footer-links" aria-label="Footer">
+        <a href="/privacy/">Privacy</a>
+        <a href="/terms/">Terms</a>
+        <a href="https://babarali.com" rel="noopener">babarali.com</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/assets/js/config.js"></script>
+  <script src="/assets/js/bobo-auth.js"></script>
+  <script src="/assets/js/site.js"></script>
+  <script src="/assets/js/dashboard.js"></script>
+</body>
+</html>

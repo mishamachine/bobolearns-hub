@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-label="Placeholder illustration of a friendly dog">
+  <rect width="400" height="400" fill="#ffd23f"/>
+  <g stroke="#111" stroke-width="8" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M92 120 L66 238 Q72 290 118 278 L142 168 Z" fill="#c98a3d"/>
+    <path d="M308 120 L334 238 Q328 290 282 278 L258 168 Z" fill="#c98a3d"/>
+    <ellipse cx="200" cy="208" rx="112" ry="116" fill="#e8b26a"/>
+    <ellipse cx="200" cy="250" rx="58" ry="46" fill="#fff6e3"/>
+    <circle cx="158" cy="186" r="12" fill="#111"/>
+    <circle cx="242" cy="186" r="12" fill="#111"/>
+    <path d="M178 232 Q200 222 222 232 Q216 252 200 254 Q184 252 178 232 Z" fill="#111"/>
+    <path d="M200 254 L200 272 M200 272 Q184 286 170 274 M200 272 Q216 286 230 274" fill="none"/>
+    <path d="M232 276 Q236 312 214 318 Q200 316 204 296 Z" fill="#e63b2e"/>
+  </g>
+  <text x="200" y="372" text-anchor="middle" font-family="Impact, Arial Black, sans-serif" font-size="26" fill="#111">BOBO • CHIEF LEARNING OFFICER</text>
+</svg>
