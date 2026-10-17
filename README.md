@@ -1,6 +1,6 @@
 # BoboLearns hub (bobolearns.com)
 
-Static site (HTML/CSS/JS, no build step) that links every BoboLearns learning site, provides the shared login, and shows cross-site stats. A project by [Babar Ali](https://babarali.com).
+Live at https://bobolearns.com. Static site (HTML/CSS/JS, no build step) that links every BoboLearns learning site, provides the shared login, and shows cross-site stats. A project by [Babar Ali](https://babarali.com).
 
 | Path | Purpose |
 |---|---|
