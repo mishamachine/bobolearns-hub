@@ -8,14 +8,38 @@
       "accent": "#e63b2e",
       "status": "live",
       "url": "https://lingo.bobolearns.com",
-      "tagline": "Learn to speak a new language well enough to get by. Structured 13-week courses with flashcards, grammar, quizzes and an AI tutor.",
-      "tags": ["Spanish", "French", "German", "Italian", "Portuguese"],
-      "stats": [
-        { "label": "Lessons done", "table": "user_progress", "agg": "count" },
-        { "label": "Languages", "table": "user_progress", "agg": "distinct", "column": "language_code" },
-        { "label": "Avg quiz", "table": "user_progress", "agg": "avg", "column": "quiz_score", "suffix": "%" }
+      "tagline": "Free language courses: structured lessons, flashcards, quizzes and an AI tutor.",
+      "tags": [
+        "Spanish",
+        "French",
+        "German",
+        "Italian",
+        "Portuguese"
       ],
-      "lastActive": { "table": "user_progress", "column": "completed_at" }
+      "stats": [
+        {
+          "label": "Lessons done",
+          "table": "user_progress",
+          "agg": "count"
+        },
+        {
+          "label": "Languages",
+          "table": "user_progress",
+          "agg": "distinct",
+          "column": "language_code"
+        },
+        {
+          "label": "Avg quiz",
+          "table": "user_progress",
+          "agg": "avg",
+          "column": "quiz_score",
+          "suffix": "%"
+        }
+      ],
+      "lastActive": {
+        "table": "user_progress",
+        "column": "completed_at"
+      }
     },
     {
       "slug": "chess",
@@ -24,12 +48,27 @@
       "accent": "#1f9d94",
       "status": "live",
       "url": "https://chess.bobolearns.com",
-      "tagline": "Learn chess step by step, from the basics to your own game plan.",
-      "tags": ["Chess"],
-      "stats": [
-        { "label": "Sessions", "table": "site_events", "agg": "count", "where": { "site": "chess" } }
+      "tagline": "Learn chess step by step, free for everyone.",
+      "tags": [
+        "Chess"
       ],
-      "lastActive": { "table": "site_events", "column": "created_at", "where": { "site": "chess" } }
+      "stats": [
+        {
+          "label": "Sessions",
+          "table": "site_events",
+          "agg": "count",
+          "where": {
+            "site": "chess"
+          }
+        }
+      ],
+      "lastActive": {
+        "table": "site_events",
+        "column": "created_at",
+        "where": {
+          "site": "chess"
+        }
+      }
     },
     {
       "slug": "next",
@@ -37,8 +76,10 @@
       "emoji": "✨",
       "accent": "#ffd23f",
       "status": "soon",
-      "tagline": "More subjects are on the way. The goal is fluency in anything, one small daily habit at a time.",
-      "tags": ["Japanese", "Urdu", "More soon"]
+      "tagline": "More subjects are on the way, built the same way: free, for the people.",
+      "tags": [
+        "More subjects"
+      ]
     }
   ]
 }

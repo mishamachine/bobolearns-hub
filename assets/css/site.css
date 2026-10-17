@@ -192,6 +192,16 @@ input:focus, select:focus { outline: 3px solid var(--blue); outline-offset: 0; }
 .nf { min-height: 70vh; display: grid; place-items: center; text-align: center; padding: 40px 20px; }
 .nf h1 { font-size: clamp(5rem, 22vw, 11rem); margin: 0; }
 
+/* Manifesto */
+.manifesto { background: var(--ink); color: var(--cream); border-bottom: var(--bd); }
+.manifesto .eyebrow { background: var(--yellow); color: var(--ink); }
+.manifesto h2 { font-size: clamp(2.2rem, 7vw, 4.6rem); max-width: 14em; }
+.manifesto-body { max-width: 44em; font-size: 1.1rem; margin: 8px 0 36px; }
+.manifesto-body p { margin-bottom: 1em; }
+.points .point { background: var(--cream); color: var(--ink); border: var(--bd); box-shadow: 6px 6px 0 var(--yellow); padding: 18px 20px; }
+.points .point b { display: block; font-family: var(--head); font-weight: 400; font-size: 1.25rem; text-transform: uppercase; margin-bottom: 6px; }
+.points .point span { font-size: .92rem; color: var(--muted); }
+
 /* Responsive */
 @media (max-width: 900px) {
   .hero-grid, .grid-3, .grid-2, .stat-grid { grid-template-columns: 1fr; }
