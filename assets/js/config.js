@@ -6,6 +6,6 @@ window.BOBO_CONFIG = {
   // Session cookie is shared across every *.bobolearns.com site so one login works everywhere.
   cookieDomain: ".bobolearns.com",
   rootHost: "bobolearns.com",
-  contactEmail: "hello@bobolearns.com", // TODO: confirm this mailbox exists (also referenced in /privacy and /terms)
+  contactEmail: "hello@babarali.com",
   creator: { name: "Babar Ali", url: "https://babarali.com" }
 };

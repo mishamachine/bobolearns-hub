@@ -38,6 +38,6 @@ For a login screen, send signed-out users to `https://bobolearns.com/login/?next
 Add an object to `sites.json` (`slug`, `name`, `url`, `status`, `tagline`, `stats`, `lastActive`) and push. Stats are declarative (`count`, `sum`, `avg`, `distinct` over a Supabase table filtered to the user).
 
 ## Before launch checklist
-- Confirm `contactEmail` in `assets/js/config.js` is a real mailbox.
+- Confirm hello@babarali.com is a working mailbox (set in `assets/js/config.js`, with matching fallbacks in the HTML).
 - Add Bobo's photo as `assets/img/bobo.jpg` (a placeholder shows until then).
 - Have the Privacy Policy and Terms reviewed.
