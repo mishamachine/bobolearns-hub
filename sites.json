@@ -48,9 +48,10 @@
       "accent": "#1f9d94",
       "status": "live",
       "url": "https://chess.bobolearns.com",
-      "tagline": "Learn chess step by step, free for everyone.",
+      "tagline": "Play and learn chess on a real board. Your laptop's camera is the eyes, and the opponent.",
       "tags": [
-        "Chess"
+        "Real board",
+        "Camera opponent"
       ],
       "stats": [
         {
