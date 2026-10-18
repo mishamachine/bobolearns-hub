@@ -1,4 +1,4 @@
-# BoboLearns hub — Hostinger (LiteSpeed/Apache)
+# Bobo Learns hub — Hostinger (LiteSpeed/Apache)
 Options -Indexes
 DirectoryIndex index.html
 ErrorDocument 404 /404.html
