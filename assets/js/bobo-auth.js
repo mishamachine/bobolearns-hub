@@ -1,8 +1,8 @@
 /*
- * bobo-auth.js — shared BoboLearns login client.
+ * bobo-auth.js — shared Bobo Learns login client.
  *
  * The hub's login client. It reads and writes the SAME shared session cookie as Lingo and Chess
- * (cookie scoped to .bobolearns.com, default Supabase storage key), so signing in on any BoboLearns
+ * (cookie scoped to .bobolearns.com, default Supabase storage key), so signing in on any Bobo Learns
  * site signs you in on all of them. Static sites can reuse this file; React apps already have the
  * equivalent in src/lib/cookieStorage.ts.
  *

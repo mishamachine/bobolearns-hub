@@ -3,7 +3,7 @@
   "sites": [
     {
       "slug": "lingo",
-      "name": "Bobo Lingo",
+      "name": "Bobo Learns Lingo",
       "emoji": "🗣️",
       "accent": "#e63b2e",
       "status": "live",
@@ -43,7 +43,7 @@
     },
     {
       "slug": "chess",
-      "name": "Bobo Chess",
+      "name": "Bobo Learns Chess",
       "emoji": "♟️",
       "accent": "#1f9d94",
       "status": "live",

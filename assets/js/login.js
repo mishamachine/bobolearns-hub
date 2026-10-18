@@ -1,4 +1,4 @@
-// Login / sign-up / password reset. One account works across every BoboLearns site.
+// Login / sign-up / password reset. One account works across every Bobo Learns site.
 (function () {
   "use strict";
 

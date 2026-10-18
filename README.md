@@ -1,10 +1,10 @@
-# BoboLearns hub (bobolearns.com)
+# Bobo Learns hub (bobolearns.com)
 
-Live at https://bobolearns.com. Static site (HTML/CSS/JS, no build step) that links every BoboLearns learning site, provides the shared login, and shows cross-site stats. A project by [Babar Ali](https://babarali.com).
+Live at https://bobolearns.com. Static site (HTML/CSS/JS, no build step) that links every Bobo Learns site, provides the shared login, and shows cross-site stats. A project by [Babar Ali](https://babarali.com).
 
 | Path | Purpose |
 |---|---|
-| `/` | Landing page: what it is, sites, FAQ |
+| `/` | Landing page: a short note that this is a personal sandbox open to all, plus the sites |
 | `/login/` | Sign in / sign up (Google, Apple, email + password), password reset |
 | `/dashboard/` | Logged-in stats: today, streak, 7-day chart, per-site stats |
 | `/privacy/`, `/terms/` | Legal pages (drafts: have counsel review) |
@@ -37,4 +37,7 @@ Add an object to `sites.json` (`slug`, `name`, `url`, `status`, `tagline`, `stat
 - Have the Privacy Policy and Terms reviewed.
 
 ## Cache busting
-Assets are cached for up to an hour (see `.htaccess`). Their links carry `?v=N` (currently 3). When you change any CSS or JS, bump `N` in the HTML files so visitors get the new version right away.
+Assets are cached for up to an hour (see `.htaccess`). Their links carry `?v=N` (currently 4). When you change any CSS or JS, bump `N` in the HTML files so visitors get the new version right away.
+
+## Naming
+The product name is **Bobo Learns** followed by the subject (Bobo Learns Lingo, Bobo Learns Chess). The mascot is **Mister Bobo** ("Bobo" for short). The Bobo artwork is generated in the lingo repo (`src/lib/boboArt.ts`, `npm run export:bobo`); `assets/img/bobo/` and `assets/img/favicon.svg` are copies of its output.

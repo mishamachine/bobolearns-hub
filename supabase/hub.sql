@@ -1,4 +1,4 @@
--- BoboLearns hub: shared activity log for any site (Chess today, future sites tomorrow).
+-- Bobo Learns hub: shared activity log for any site (Chess today, future sites tomorrow).
 -- NOT yet applied. Review, then run in the Supabase SQL editor for project ywcrzkvwamjchjjkfrve.
 -- The hub dashboard already reads these existing tables: daily_activity, user_settings, user_progress.
 
@@ -25,5 +25,5 @@ drop policy if exists "site_events: insert own" on public.site_events;
 create policy "site_events: insert own" on public.site_events
   for insert to authenticated with check (user_id = auth.uid());
 
--- From any BoboLearns site (using the shared boboAuth client):
+-- From any Bobo Learns site (using the shared boboAuth client):
 --   await boboAuth.client.from('site_events').insert({ site: 'chess', event: 'game_finished', value: 1 });
