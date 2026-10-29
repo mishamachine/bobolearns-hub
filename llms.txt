@@ -1,0 +1,15 @@
+# Bobo Learns
+
+> Bobo Learns is a personal sandbox for learning things, made by Babar Ali and open to everyone because it's fun. Each site is its own small experiment, free to use, and a single optional login works across them.
+
+## Live apps
+
+- [Bobo Learns Lingo](https://lingo.bobolearns.com): free language courses with structured lessons, flashcards, quizzes and an AI tutor: Spanish, French, German, Italian, Portuguese, Japanese and Urdu.
+- [Bobo Learns Chess](https://chess.bobolearns.com): play and learn chess on a real board, with your laptop's camera as the eyes and the opponent.
+
+## This site
+
+- [Home](https://bobolearns.com/): what Bobo Learns is and the list of sites.
+- [Privacy Policy](https://bobolearns.com/privacy/)
+- [Terms & Conditions](https://bobolearns.com/terms/)
+- [Contact](mailto:hello@babarali.com)

@@ -3,25 +3,32 @@ Options -Indexes
 DirectoryIndex index.html
 ErrorDocument 404 /404.html
 
-# Force HTTPS
+# www -> apex (301), and force HTTPS, in one hop
 RewriteEngine On
+RewriteCond %{HTTP_HOST} ^www\.bobolearns\.com$ [NC]
+RewriteRule ^ https://bobolearns.com%{REQUEST_URI} [L,R=301]
 RewriteCond %{HTTPS} !=on
 RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
-# Don't serve repo internals (also keeps /supabase SQL and the README private)
-RedirectMatch 404 ^/(\.git|supabase|README\.md|\.gitignore)
+# Don't serve repo internals (also keeps /supabase SQL and the README private).
+# Anchored: any dotfile or dotfolder (.git, .github, .gitignore, ...) except
+# .well-known (certificate validation), plus /supabase and README.md.
+RedirectMatch 404 ^/(\.(?!well-known(/|$))[^/]+|supabase|README\.md)(/|$)
 
 <IfModule mod_headers.c>
   Header always set X-Content-Type-Options "nosniff"
   Header always set Referrer-Policy "strict-origin-when-cross-origin"
   Header always set X-Frame-Options "SAMEORIGIN"
   Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+  Header always set Strict-Transport-Security "max-age=31536000"
 </IfModule>
 
 <IfModule mod_expires.c>
   ExpiresActive On
   ExpiresByType image/svg+xml "access plus 1 month"
   ExpiresByType image/jpeg "access plus 1 month"
+  ExpiresByType image/png "access plus 1 month"
+  ExpiresByType image/x-icon "access plus 1 month"
   ExpiresByType text/css "access plus 1 hour"
   ExpiresByType application/javascript "access plus 1 hour"
   ExpiresByType text/javascript "access plus 1 hour"
