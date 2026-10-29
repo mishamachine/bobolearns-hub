@@ -1,0 +1,34 @@
+name: PR check
+
+# Runs on every pull request into main. This is a static site with no build step, so the check
+# looks for the mistakes that break pages at load time: JavaScript syntax errors, local links
+# and assets that don't exist, missing #anchors, and a malformed sites.json or sitemap.xml.
+# Never deploys, needs no network beyond the runner setup, and reads no secrets.
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: JavaScript syntax
+        run: for f in assets/js/*.js; do node --check "$f"; done
+
+      - name: Links, anchors, sites.json and sitemap.xml
+        run: python3 .github/scripts/check_site.py
