@@ -3,4 +3,12 @@ Allow: /
 Disallow: /dashboard/
 Disallow: /login/
 
+User-agent: Googlebot
+User-agent: GPTBot
+User-agent: ClaudeBot
+User-agent: PerplexityBot
+Allow: /
+Disallow: /dashboard/
+Disallow: /login/
+
 Sitemap: https://bobolearns.com/sitemap.xml

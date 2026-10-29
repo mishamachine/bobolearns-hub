@@ -6,6 +6,9 @@
 2. Every #fragment link points to an id that exists on the target page.
 3. sites.json parses and each site has the fields the home page and dashboard read.
 4. sitemap.xml parses and each of its URLs on this domain maps to a page in the repo.
+5. Every indexable page (one without <meta name="robots" content="noindex">) has a canonical link,
+   an og:image, a twitter:card and, if it carries JSON-LD, only blocks that parse as JSON.
+   The home page must carry at least one JSON-LD block. An og:image on this domain must exist in the repo.
 
 Run from the repo root: python3 .github/scripts/check_site.py
 """
@@ -22,6 +25,7 @@ SKIP_DIRS = {".git", "node_modules", "scripts", "supabase"}
 
 ATTR_RE = re.compile(r'\b(?:href|src)\s*=\s*"([^"]*)"', re.I)
 ID_RE = re.compile(r'\bid\s*=\s*"([^"]+)"', re.I)
+JSONLD_RE = re.compile(r'<script[^>]*type\s*=\s*"application/ld\+json"[^>]*>(.*?)</script>', re.I | re.S)
 
 errors = []
 
@@ -72,6 +76,43 @@ def check_html():
                 errors.append(f"{rel}: {url} has no matching id in {target.relative_to(ROOT)}")
 
 
+def meta_content(text, attr, name):
+    """Content of the first <meta {attr}="{name}" content="..."> (either attribute order), or None."""
+    for tag in re.findall(r"<meta\b[^>]*>", text, re.I):
+        if re.search(rf'\b{attr}\s*=\s*"{re.escape(name)}"', tag, re.I):
+            m = re.search(r'\bcontent\s*=\s*"([^"]*)"', tag, re.I)
+            return m.group(1) if m else ""
+    return None
+
+
+def check_seo():
+    for page in html_pages():
+        rel = page.relative_to(ROOT)
+        text = page.read_text(encoding="utf-8")
+        robots = meta_content(text, "name", "robots") or ""
+        blocks = JSONLD_RE.findall(text)
+        for i, raw in enumerate(blocks):
+            try:
+                json.loads(raw)
+            except ValueError as e:
+                errors.append(f"{rel}: JSON-LD block {i + 1} does not parse ({e})")
+        if "noindex" in robots.lower():
+            continue  # pages kept out of search (login, dashboard, 404) need no social tags
+        if not re.search(r'<link\b[^>]*\brel\s*=\s*"canonical"[^>]*\bhref\s*=\s*"https://[^"]+"', text, re.I):
+            errors.append(f"{rel}: indexable page has no https canonical link")
+        image = meta_content(text, "property", "og:image")
+        if not image:
+            errors.append(f"{rel}: indexable page has no og:image")
+        else:
+            parts = urlsplit(image)
+            if parts.netloc == SITE_HOST and resolve(parts.path) is None:
+                errors.append(f"{rel}: og:image {image} does not exist in the repo")
+        if not meta_content(text, "name", "twitter:card"):
+            errors.append(f"{rel}: indexable page has no twitter:card")
+        if rel == pathlib.Path("index.html") and not blocks:
+            errors.append(f"{rel}: home page has no JSON-LD block")
+
+
 def check_sites_json():
     path = ROOT / "sites.json"
     try:
@@ -119,6 +160,7 @@ def check_sitemap():
 
 def main():
     check_html()
+    check_seo()
     check_sites_json()
     check_sitemap()
     if errors:
@@ -126,7 +168,7 @@ def main():
         for e in errors:
             print(f"  - {e}")
         return 1
-    print(f"OK: {len(list(html_pages()))} HTML pages, sites.json and sitemap.xml checked.")
+    print(f"OK: {len(list(html_pages()))} HTML pages, sites.json, sitemap.xml and SEO tags checked.")
     return 0
 
 
