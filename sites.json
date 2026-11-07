@@ -3,11 +3,11 @@
   "sites": [
     {
       "slug": "lingo",
-      "name": "Bobo Learns Lingo",
+      "name": "Woofabulary",
       "emoji": "🗣️",
       "accent": "#e63b2e",
       "status": "live",
-      "url": "https://lingo.bobolearns.com",
+      "url": "https://woof.bobolearns.com",
       "tagline": "Free language courses: structured lessons, flashcards, quizzes and an AI tutor.",
       "tags": [
         "Spanish",
