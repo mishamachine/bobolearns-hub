@@ -46,14 +46,21 @@ def ids_in(page, cache={}):
     return cache[page]
 
 
+# Google Search Console verification files are one-line stubs that Google matches exactly.
+# Only files at the repo root with this exact name shape skip the doctype and title checks.
+VERIFICATION_RE = re.compile(r"^google[0-9a-f]{16}\.html$")
+
+
 def check_html():
     for page in html_pages():
         rel = page.relative_to(ROOT)
         text = page.read_text(encoding="utf-8")
-        if not text.lstrip().lower().startswith("<!doctype html"):
-            errors.append(f"{rel}: missing <!doctype html>")
-        if "<title>" not in text.lower():
-            errors.append(f"{rel}: missing <title>")
+        is_verification = page.parent == ROOT and bool(VERIFICATION_RE.match(page.name))
+        if not is_verification:
+            if not text.lstrip().lower().startswith("<!doctype html"):
+                errors.append(f"{rel}: missing <!doctype html>")
+            if "<title>" not in text.lower():
+                errors.append(f"{rel}: missing <title>")
         for url in ATTR_RE.findall(text):
             parts = urlsplit(url)
             if parts.scheme or parts.netloc or url.startswith(("mailto:", "tel:", "javascript:")):

@@ -3,11 +3,11 @@
   "sites": [
     {
       "slug": "lingo",
-      "name": "Bobo Learns Lingo",
+      "name": "Woofabulary",
       "emoji": "🗣️",
       "accent": "#e63b2e",
       "status": "live",
-      "url": "https://lingo.bobolearns.com",
+      "url": "https://woof.bobolearns.com",
       "tagline": "Free language courses: structured lessons, flashcards, quizzes and an AI tutor.",
       "tags": [
         "Spanish",
@@ -48,8 +48,7 @@
       "name": "Bobo Learns Chess",
       "emoji": "♟️",
       "accent": "#1f9d94",
-      "status": "live",
-      "url": "https://chess.bobolearns.com",
+      "status": "soon",
       "tagline": "Play and learn chess on a real board. Your laptop's camera is the eyes, and the opponent.",
       "tags": [
         "Real board",
