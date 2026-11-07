@@ -1,0 +1,3 @@
+
+# Another app is served from this folder on the host; never track or clean it
+/omg/
