@@ -37,7 +37,7 @@ Add an object to `sites.json` (`slug`, `name`, `url`, `status`, `tagline`, `stat
 - Have the Privacy Policy and Terms reviewed.
 
 ## Cache busting
-Assets are cached for up to an hour (see `.htaccess`). Their links carry `?v=N` (currently 4). When you change any CSS or JS, bump `N` in the HTML files so visitors get the new version right away.
+Assets are cached for up to an hour (see `.htaccess`). Their links carry `?v=N` (currently 5). When you change any CSS or JS, bump `N` in the HTML files so visitors get the new version right away.
 
 ## Naming
 The product name is **Bobo Learns** followed by the subject (Bobo Learns Lingo, Bobo Learns Chess). The mascot is **Mister Bobo** ("Bobo" for short). The Bobo artwork is generated in the lingo repo (`src/lib/boboArt.ts`, `npm run export:bobo`); `assets/img/bobo/` and `assets/img/favicon.svg` are copies of its output.

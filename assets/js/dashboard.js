@@ -181,14 +181,8 @@
     };
   }
 
-  A.getSession().then(function (session) {
-    if (!session) {
-      location.replace("/login/?next=" + encodeURIComponent("/dashboard/"));
-      return;
-    }
-    var user = session.user;
+  function load(user) {
     var since = ymd(daysAgo(400));
-
     Promise.all([
       sb.from("daily_activity").select("activity_date,seconds_studied").eq("user_id", user.id)
         .gte("activity_date", since).order("activity_date", { ascending: false }),
@@ -205,9 +199,19 @@
     }).catch(function () {
       $("loading").innerHTML = '<div class="card">We couldn\'t load your stats. Refresh to try again.</div>';
     });
+  }
 
+  A.getSession().then(function (session) {
+    if (!session) {
+      location.replace("/login/?next=" + encodeURIComponent("/dashboard/"));
+      return;
+    }
     $("signout").addEventListener("click", function () {
       A.signOut().then(function () { location.assign("/"); });
+    });
+    // Accounts that have not confirmed the age statement (new, or existing) are asked once before anything loads.
+    window.boboAgeGate.run(sb, session.user).then(function (ok) {
+      if (ok) { load(session.user); } else { location.assign("/"); }
     });
   });
 })();

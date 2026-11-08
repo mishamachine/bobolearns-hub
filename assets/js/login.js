@@ -10,6 +10,13 @@
 
   var $ = function (id) { return document.getElementById(id); };
 
+  // Signed in: ask the one-time age question first (see age-gate.js), then go on. A refusal signs the user out.
+  function proceed(user) {
+    return window.boboAgeGate.run(sb, user).then(function (ok) {
+      if (ok) { location.assign(dest); } else { location.assign("/"); }
+    });
+  }
+
   // Hide sign-in providers that aren't switched on yet (see BOBO_CONFIG.providers).
   document.querySelectorAll("[data-provider]").forEach(function (b) {
     if (!window.BOBO_CONFIG.providers[b.getAttribute("data-provider")]) { b.hidden = true; }
@@ -62,7 +69,7 @@
       : sb.auth.signUp({ email: email, password: password, options: { emailRedirectTo: dest } });
     req.then(function (res) {
       if (res.error) { throw res.error; }
-      if (res.data && res.data.session) { location.assign(dest); return; }
+      if (res.data && res.data.session) { return proceed(res.data.session.user); }
       busy(false);
       msg("Almost there. We sent a confirmation link to " + email + ". Open it to finish signing up.", "ok");
     }).catch(function (err) { busy(false); msg(friendly(err), "err"); });
@@ -104,14 +111,14 @@
     if (pw.length < 8) { return msg("Use at least 8 characters for your password.", "err"); }
     sb.auth.updateUser({ password: pw }).then(function (res) {
       if (res.error) { throw res.error; }
-      location.assign(dest);
+      return proceed(res.data.user);
     }).catch(function (err) { msg(friendly(err), "err"); });
   });
 
   // Already signed in? Skip the form (unless we're mid-recovery).
   var recovering = params.has("code") || /type=recovery/.test(location.hash);
   A.getSession().then(function (session) {
-    if (session && !recovering) { location.replace(dest); }
+    if (session && !recovering) { proceed(session.user); }
   });
 
   if (params.get("mode") === "signup") { setMode("signup"); }
