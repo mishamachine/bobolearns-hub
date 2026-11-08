@@ -4,7 +4,7 @@
  * Statement (self-declared, no birthdate, no location check):
  *   "I'm at least 13 years old, and at least 16 if I live in the EU or UK."
  * A "Yes" calls the confirm-age Edge Function, which records the flag in the user's app_metadata on the
- * server (the browser cannot write app_metadata). "No" signs the user out. Requires bobo-auth.js.
+ * server (the browser cannot write app_metadata). "No" deletes the account and its data. Requires bobo-auth.js.
  * Keep AGE_RULE_VERSION in step with the Edge Function; changing it asks everyone again.
  */
 (function (root) {
@@ -13,6 +13,9 @@
   var AGE_RULE_VERSION = "age-v1";
   var STATEMENT = "I'm at least 13 years old, and at least 16 if I live in the EU or UK.";
   var REFUSAL = "Sorry, you need to be at least 13 (16 in the EU or UK) to have an account. You can still use the free lessons without signing in.";
+  var DELETE_WARNING = "This will delete your account and all your progress. Continue?";
+  var DELETE_ERROR = "We couldn't delete your account. Check your connection and try again.";
+  var PROGRESS_TABLES = ["user_progress", "daily_activity", "saved_lessons"];
   var SAVE_ERROR = "We couldn't save that. Check your connection and try again.";
 
   function needsConfirm(user) {
@@ -32,8 +35,20 @@
     });
   }
 
-  function refuse(client) {
-    return client.auth.signOut();
+  // "No": the server deletes the account and everything tied to it (nothing is kept about the answer); then the local session is cleared.
+  function declineOnServer(client) {
+    return client.functions.invoke("confirm-age", { method: "POST", body: { action: "decline" } }).then(function (res) {
+      if (res.error) { throw res.error; }
+      return Promise.resolve(client.auth.signOut({ scope: "local" })).catch(function () { /* the account is already gone */ });
+    });
+  }
+
+  // True when the account has any study data. If we can't tell, assume it does, so the confirm step is shown.
+  function hasProgress(client, userId) {
+    return Promise.all(PROGRESS_TABLES.map(function (t) {
+      return Promise.resolve(client.from(t).select("*", { count: "exact", head: true }).eq("user_id", userId))
+        .then(function (r) { return r.error ? true : (r.count || 0) > 0; }, function () { return true; });
+    })).then(function (flags) { return flags.some(Boolean); });
   }
 
   function el(tag, attrs, text) {
@@ -61,7 +76,7 @@
 
       box.addEventListener("keydown", function (e) {
         if (e.key !== "Tab") { return; }
-        var items = [yes, no].filter(function (b) { return !b.hidden && !b.disabled; });
+        var items = [yes, no, del, back].filter(function (b) { return !b.hidden && !b.disabled; });
         if (!items.length) { return; }
         var first = items[0], last = items[items.length - 1];
         if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
@@ -83,23 +98,62 @@
         });
       });
 
+      function showRefusal() {
+        text.textContent = REFUSAL;
+        note.hidden = true;
+        [yes, no, del, back].forEach(function (b) { b.hidden = true; });
+        var ok = el("button", { "class": "btn btn-red btn-block", type: "button" }, "OK");
+        box.appendChild(ok);
+        ok.focus();
+        ok.addEventListener("click", function () { overlay.remove(); resolve(false); });
+      }
+
+      function backToPrompt() {
+        text.textContent = STATEMENT;
+        del.hidden = true;
+        back.hidden = true;
+        yes.hidden = false;
+        no.hidden = false;
+        busy(false);
+        yes.focus();
+      }
+
+      function doDecline() {
+        busy(true);
+        note.hidden = true;
+        declineOnServer(client).then(showRefusal).catch(function () {
+          busy(false);
+          note.textContent = DELETE_ERROR;
+          note.hidden = false;
+        });
+      }
+
+      var del = el("button", { "class": "btn btn-red btn-block", type: "button", hidden: "" }, "Delete");
+      var back = el("button", { "class": "btn btn-ghost btn-block", type: "button", hidden: "" }, "Go back");
+      box.appendChild(del);
+      box.appendChild(back);
+      del.addEventListener("click", doDecline);
+      back.addEventListener("click", backToPrompt);
+
       no.addEventListener("click", function () {
         busy(true);
-        refuse(client).catch(function () { /* local session is cleared even if the call fails */ }).then(function () {
-          text.textContent = REFUSAL;
-          note.hidden = true;
+        note.hidden = true;
+        // Accounts with progress get one confirm step first; new accounts are deleted straight away.
+        hasProgress(client, user.id).then(function (has) {
+          if (!has) { doDecline(); return; }
+          text.textContent = DELETE_WARNING;
           yes.hidden = true;
           no.hidden = true;
-          var ok = el("button", { "class": "btn btn-red btn-block", type: "button" }, "OK");
-          box.appendChild(ok);
-          ok.focus();
-          ok.addEventListener("click", function () { overlay.remove(); resolve(false); });
+          del.hidden = false;
+          back.hidden = false;
+          busy(false);
+          back.focus();
         });
       });
     });
   }
 
-  var api = { AGE_RULE_VERSION: AGE_RULE_VERSION, STATEMENT: STATEMENT, REFUSAL: REFUSAL, needsConfirm: needsConfirm, confirmOnServer: confirmOnServer, refuse: refuse, run: run };
+  var api = { AGE_RULE_VERSION: AGE_RULE_VERSION, STATEMENT: STATEMENT, REFUSAL: REFUSAL, needsConfirm: needsConfirm, confirmOnServer: confirmOnServer, declineOnServer: declineOnServer, hasProgress: hasProgress, DELETE_WARNING: DELETE_WARNING, run: run };
   root.boboAgeGate = api;
   if (typeof module !== "undefined" && module.exports) { module.exports = api; }
 })(typeof window !== "undefined" ? window : this);

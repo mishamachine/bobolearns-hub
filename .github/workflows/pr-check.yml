@@ -31,7 +31,7 @@ jobs:
         run: for f in assets/js/*.js; do node --check "$f"; done
 
       - name: Unit tests (age prompt and confirm-age function)
-        run: node --test tests/ supabase/functions/confirm-age/handler.test.ts
+        run: node --test tests/age-gate.test.cjs supabase/functions/confirm-age/handler.test.ts
 
       - name: Links, anchors, sites.json and sitemap.xml
         run: python3 .github/scripts/check_site.py
