@@ -7,6 +7,8 @@
 3. sites.json parses and each site has the fields the home page and dashboard read.
 4. sitemap.xml parses and each of its URLs on this domain maps to a page in the repo.
 
+5. The retired contact address must not appear in public pages or in assets/js/config.js.
+
 Run from the repo root: python3 .github/scripts/check_site.py
 """
 import json
@@ -124,10 +126,21 @@ def check_sitemap():
             errors.append(f"sitemap.xml: {loc.text} has no page in the repo")
 
 
+RETIRED_CONTACT = "hello@babarali" + ".com"
+
+
+def check_contact():
+    files = list(html_pages()) + [ROOT / "assets" / "js" / "config.js"]
+    for f in files:
+        if RETIRED_CONTACT in f.read_text(encoding="utf-8"):
+            errors.append(f"{f.relative_to(ROOT)}: contains the retired contact address; use machinemisha@gmail.com")
+
+
 def main():
     check_html()
     check_sites_json()
     check_sitemap()
+    check_contact()
     if errors:
         print(f"{len(errors)} problem(s) found:")
         for e in errors:

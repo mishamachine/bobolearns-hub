@@ -32,7 +32,7 @@ To send a signed-out user from another site to the hub's login: `https://bobolea
 Add an object to `sites.json` (`slug`, `name`, `url`, `status`, `tagline`, `stats`, `lastActive`) and push. Stats are declarative (`count`, `sum`, `avg`, `distinct` over a Supabase table filtered to the user).
 
 ## Before launch checklist
-- Confirm hello@babarali.com is a working mailbox (set in `assets/js/config.js`, with matching fallbacks in the HTML).
+- Confirm machinemisha@gmail.com is a working mailbox (set in `assets/js/config.js`, with matching fallbacks in the HTML).
 - Apple sign-in is hidden. Set `providers.apple` to `true` in `assets/js/config.js` after configuring it in Supabase.
 - Have the Privacy Policy and Terms reviewed.
 
