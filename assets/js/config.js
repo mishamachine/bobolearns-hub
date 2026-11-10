@@ -6,7 +6,7 @@ window.BOBO_CONFIG = {
   // Session cookie is shared across every *.bobolearns.com site so one login works everywhere.
   cookieDomain: ".bobolearns.com",
   rootHost: "bobolearns.com",
-  contactEmail: "hello@babarali.com",
+  contactEmail: "machinemisha@gmail.com",
   // Flip apple to true once Sign in with Apple is configured in Supabase (needs an Apple Developer account).
   providers: { google: true, apple: false },
   creator: { name: "Babar Ali", url: "https://babarali.com" }
