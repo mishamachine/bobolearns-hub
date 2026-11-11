@@ -18,7 +18,7 @@
       "<div>" + tags + "</div>" +
       (live ? '<span class="go">Open site →</span>' : "");
     return live
-      ? '<a class="card site" href="' + esc(s.url) + '">' + inner + "</a>"
+      ? '<a class="card site" href="' + esc(s.url) + '" data-track-site="' + esc(s.slug) + '">' + inner + "</a>"
       : '<div class="card site is-soon">' + inner + "</div>";
   }
 
