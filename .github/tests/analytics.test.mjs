@@ -11,14 +11,15 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 const { SCHEMA, BANNED_PROP_WORDS } = await import(path.join(ROOT, 'supabase/functions/events/schema.js'));
 const core = await import(path.join(ROOT, 'supabase/functions/events/core.js'));
-const { validateBatch, propsOk, countryFrom, originAllowed, createLimiter, bannedKey, LIMITS } = core;
+const { validateBatch, propsOk, countryFrom, originAllowed, createLimiter, bannedKey, clientIp, LIMITS } = core;
+const { createEventsHandler, createDashboardHandler, secretsEqual, readCapped } = await import(path.join(ROOT, 'supabase/functions/events/handler.js'));
 
 const A = '3b1f9c2e-7a54-4d0b-9e21-5c8d6f0a1b23';
 const S = '9d2c4e61-0f3a-4b7d-8a15-2e6b7c9d0e41';
 const env = (over = {}) => ({ app: 'hub', anon_id: A, session_id: S, platform: 'web', events: [{ event: 'app_open', props: { surface: 'home', auth_state: 'guest' } }], ...over });
 
 // ---------- the browser module, run in a sandbox ----------
-function loadClient({ enabled = true, dnt = false, cookie = '', search = '', referrer = '', path: pathname = '/', storage = {}, app = 'hub', nodes = null } = {}) {
+function loadClient({ enabled = true, dnt = false, cookie = '', search = '', referrer = '', path: pathname = '/', storage = {}, app = 'hub', nodes = null, ids = {} } = {}) {
   const sent = [];
   const mem = (init) => { const m = new Map(Object.entries(init)); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k), _m: m }; };
   const local = mem(storage), sess = mem({});
@@ -28,7 +29,7 @@ function loadClient({ enabled = true, dnt = false, cookie = '', search = '', ref
     crypto: globalThis.crypto, localStorage: local, sessionStorage: sess,
     navigator: { doNotTrack: dnt ? '1' : null, sendBeacon: (url, blob) => { sent.push({ url, blob }); return true; } },
   };
-  const doc = { cookie, referrer, addEventListener: (t, f) => listeners.push([t, f]), querySelectorAll: (sel) => (nodes && nodes[sel]) || [], getElementById: () => null };
+  const doc = { cookie, referrer, addEventListener: (t, f) => listeners.push([t, f]), querySelectorAll: (sel) => (nodes && nodes[sel]) || [], getElementById: (i) => ids[i] || null };
   const ctx = { window: win, document: doc, location: { pathname, search }, navigator: win.navigator, URL, URLSearchParams, Blob, fetch: () => Promise.resolve(), console };
   vm.runInNewContext(read('assets/js/bb-analytics.js'), ctx);
   const payloads = async () => Promise.all(sent.map(async (s) => JSON.parse(await s.blob.text())));
@@ -178,7 +179,7 @@ test('validation: wrong app, apps without a device ID, bad IDs, bounds, unknown 
   ] }), null);
   assert.equal(r.rows.length, 2);
   assert.equal(r.rejected, 5);
-  assert.equal(validateBatch(env({ app: 'chess', events: [{ event: 'site_open', props: { slug: 'x' } }] }), null).rows.length, 0, 'hub-only event');
+  assert.equal(validateBatch(env({ app: 'chess', events: [{ event: 'site_open', props: { slug: 'x' } }] }), null).error, 'no_valid_events', 'hub-only event');
 });
 
 test('source fields: only codes pass; junk becomes null', () => {
@@ -186,9 +187,11 @@ test('source fields: only codes pass; junk becomes null', () => {
   assert.deepEqual([out.rows[0].utm_source, out.rows[0].utm_medium, out.rows[0].utm_campaign, out.rows[0].referrer_domain, out.rows[0].app_version], [null, 'social', null, null, '1.2.3']);
 });
 
-test('origins: bobolearns.com and localhost only', () => {
-  for (const o of ['https://bobolearns.com', 'https://woof.bobolearns.com', 'http://localhost:8000']) assert.ok(originAllowed(o), o);
-  for (const o of ['https://evil.com', 'https://bobolearns.com.evil.com', 'http://bobolearns.com', null, '']) assert.ok(!originAllowed(o), String(o));
+test('origins: bobolearns.com only in production; localhost only behind the dev switch', () => {
+  for (const o of ['https://bobolearns.com', 'https://woof.bobolearns.com']) assert.ok(originAllowed(o), o);
+  for (const o of ['https://evil.com', 'https://bobolearns.com.evil.com', 'http://bobolearns.com', 'http://localhost:8000', 'http://127.0.0.1:8000', null, '']) assert.ok(!originAllowed(o), String(o));
+  for (const o of ['http://localhost:8000', 'http://127.0.0.1']) assert.ok(originAllowed(o, true), o);
+  assert.ok(!originAllowed('https://evil.com', true));
 });
 
 test('rate limit: a daily-rotating key; limit per minute; the new day starts clean', async () => {
@@ -207,19 +210,192 @@ test('rate limit: a daily-rotating key; limit per minute; the new day starts cle
   assert.equal(await lim.limited('203.0.113.7'), false, 'window slides');
 });
 
-test('function source: service-role RPC only, no IP in the stored body, no GA/Meta, no table writes', () => {
-  const src = read('supabase/functions/events/index.ts');
-  assert.ok(src.includes('/rest/v1/rpc/analytics_ingest'));
-  assert.ok(src.includes('p_rows: out.rows'));
+// ---------- the migration ----------
+
+// ---------- prototype-chain names ----------
+const PROTO = ['constructor', '__proto__', 'toString', 'hasOwnProperty', 'valueOf', 'prototype'];
+
+test('prototype names as event or prop names are refused by the client and the server', () => {
+  const { api } = loadClient({ enabled: false });
+  for (const n of PROTO) {
+    assert.equal(api.cleanProps(n, {}), null, `client event ${n}`);
+    assert.equal(api.cleanProps('app_open', JSON.parse(`{"${n}":"x"}`)), null, `client prop ${n}`);
+    assert.equal(validateBatch(env({ events: [{ event: n, props: {} }] }), null).error, 'no_valid_events', `server event ${n}`);
+    assert.equal(validateBatch(env({ events: [{ event: 'app_open', props: JSON.parse(`{"${n}":"x"}`) }] }), null).error, 'no_valid_events', `server prop ${n}`);
+  }
+  assert.equal(validateBatch(env({ events: [{ event: { toString: 1 }, props: {} }, null, 5, 'constructor'] }), null).error, 'no_valid_events');
+});
+
+// ---------- the handler: statuses, size, rate limit ----------
+const ORIGIN = 'https://bobolearns.com';
+const mkEnv = (o = {}) => { const e = { SUPABASE_URL: 'https://db.test', SUPABASE_SERVICE_ROLE_KEY: 'sb_secret_x', ...o }; return (k) => e[k]; };
+const post = (body, headers = {}, init = {}) => new Request('https://fn.test/events', { method: 'POST', headers: { origin: ORIGIN, 'content-type': 'text/plain', ...headers }, body: typeof body === 'string' ? body : JSON.stringify(body), ...init });
+function mkHandler({ env = mkEnv(), limiter, fetchImpl } = {}) {
+  const calls = [];
+  const f = fetchImpl || (async (u, i) => { calls.push({ u, i }); return new Response('1', { status: 200 }); });
+  const lim = limiter || createLimiter({ secret: 't' });
+  return { h: createEventsHandler({ limiter: lim, env, fetch: async (u, i) => { calls.push({ u, i }); return f(u, i); } }), calls };
+}
+
+test('handler: prototype-chain names give a clean 400, never a 500 or 502, and nothing reaches the database', async () => {
+  const { h, calls } = mkHandler();
+  for (const n of PROTO) {
+    for (const body of [env({ events: [{ event: n, props: {} }] }), env({ events: [{ event: 'app_open', props: JSON.parse(`{"${n}":"x"}`) }] }), env({ app: n })]) {
+      const r = await h(post(body));
+      assert.equal(r.status, 400, n);
+    }
+  }
+  assert.equal((await h(post('{"__proto__":{"app":"hub"}}'))).status, 400);
+  assert.equal(calls.length, 0);
+});
+
+test('handler: a good request inserts through the RPC with a country and no IP', async () => {
+  const { h, calls } = mkHandler();
+  const r = await h(post(env(), { 'cf-ipcountry': 'ca', 'cf-connecting-ip': '203.0.113.9' }));
+  assert.equal(r.status, 200);
+  assert.deepEqual(await r.json(), { ok: true, n: 1, rejected: 0 });
+  assert.equal(calls[0].u, 'https://db.test/rest/v1/rpc/analytics_ingest');
+  const sent = JSON.parse(calls[0].i.body);
+  assert.equal(sent.p_rows[0].country, 'CA');
+  assert.ok(!JSON.stringify(sent).includes('203.0.113.9'));
+  assert.equal((await h(post(env(), { origin: 'https://evil.com' }))).status, 403);
+  assert.equal((await h(new Request('https://fn.test/events', { method: 'GET', headers: { origin: ORIGIN } }))).status, 405);
+  const bad = mkHandler({ fetchImpl: async () => new Response('x', { status: 500 }) });
+  assert.equal((await bad.h(post(env()))).status, 502);
+});
+
+test('handler: localhost origins are refused unless the dev switch is set', async () => {
+  const { h } = mkHandler();
+  assert.equal((await h(post(env(), { origin: 'http://localhost:8000' }))).status, 403);
+  const dev = mkHandler({ env: mkEnv({ EVENTS_DEV_ORIGINS: '1' }) });
+  assert.equal((await dev.h(post(env(), { origin: 'http://localhost:8000' }))).status, 200);
+});
+
+test('handler: a declared length over 8192 is refused before any byte is read', async () => {
+  let pulled = false;
+  const body = new ReadableStream({ pull() { pulled = true; } }, { highWaterMark: 0 });
+  const { h } = mkHandler();
+  const r = await h(new Request('https://fn.test/events', { method: 'POST', headers: { origin: ORIGIN, 'content-length': String(LIMITS.maxBody + 1) }, body, duplex: 'half' }));
+  assert.equal(r.status, 413);
+  assert.equal(pulled, false, 'the body stream was never read');
+});
+
+test('handler: a streamed body with no length is cut off at 8192 bytes', async () => {
+  let sent = 0;
+  const chunk = new Uint8Array(1024).fill(97);
+  const body = new ReadableStream({ pull(c) { if (sent >= 64) return c.close(); sent++; c.enqueue(chunk); } });
+  const { h } = mkHandler();
+  const r = await h(new Request('https://fn.test/events', { method: 'POST', headers: { origin: ORIGIN }, body, duplex: 'half' }));
+  assert.equal(r.status, 413);
+  assert.ok(sent <= 12, `read ${sent} KB of 64`);
+  assert.equal(await readCapped(post('x'.repeat(LIMITS.maxBody)), LIMITS.maxBody).then((t) => t.length), LIMITS.maxBody, 'exactly the cap is fine');
+  assert.equal(await readCapped(post('x'.repeat(LIMITS.maxBody + 1)), LIMITS.maxBody), null);
+});
+
+test('rate limit uses only the platform client-IP header; a spoofed x-forwarded-for changes nothing', async () => {
+  const lim = createLimiter({ secret: 't', perMinute: 3 });
+  const { h } = mkHandler({ limiter: lim });
+  const codes = [];
+  for (let i = 0; i < 5; i++) codes.push((await h(post(env(), { 'cf-connecting-ip': '198.51.100.1', 'x-forwarded-for': `10.0.0.${i}, 1.1.1.1` }))).status);
+  assert.deepEqual(codes, [200, 200, 200, 429, 429], 'rotating the leftmost x-forwarded-for does not escape the limit');
+  assert.equal((await h(post(env(), { 'cf-connecting-ip': '198.51.100.2' }))).status, 200, 'another client has its own bucket');
+  const h2 = new Headers({ 'x-forwarded-for': '9.9.9.9' });
+  assert.equal(clientIp(h2), 'no-ip', 'x-forwarded-for is never read');
+  assert.equal(clientIp(new Headers({ 'cf-connecting-ip': '1.2.3.4' })), '1.2.3.4');
+});
+
+test('limiter table: expired entries are evicted first, then the least recent; the cap never resets everyone', async () => {
+  let t = Date.parse('2026-11-11T12:00:00Z');
+  const lim = createLimiter({ secret: 't', now: () => t, perMinute: 2, maxTracked: 4 });
+  for (let i = 0; i < 3; i++) await lim.limited('hot'); // over the limit
+  for (const ip of ['a', 'b', 'c']) await lim.limited(ip);
+  assert.equal(lim.size(), 4);
+  await lim.limited('hot'); // refresh: hot is now the most recent
+  for (const ip of ['d', 'e', 'f']) await lim.limited(ip); // overflow: oldest go, never all
+  assert.equal(lim.size(), 4, 'bounded, not cleared');
+  assert.equal(await lim.limited('hot'), true, 'a busy client is still limited after the table overflowed');
+  t += 61_000; // everything expires
+  await lim.limited('z');
+  assert.equal(lim.size(), 1, 'expired entries are swept');
+});
+
+// ---------- no time of day, no sign-up to device link ----------
+test('sign_up and sign_in rows get fresh random IDs; other rows keep the device and session IDs', () => {
+  const out = validateBatch(env({ events: [
+    { event: 'app_open', props: { surface: 'home' } },
+    { event: 'sign_up', props: { auth_state: 'guest', method: 'email' } },
+    { event: 'sign_up', props: { auth_state: 'guest', method: 'google' } },
+    { event: 'sign_in', props: { method: 'email' } },
+    { event: 'signup_start', props: { method: 'email' } },
+  ] }), 'US');
+  const byEvent = (e) => out.rows.filter((r) => r.event === e);
+  assert.equal(byEvent('app_open')[0].anon_id, A);
+  assert.equal(byEvent('signup_start')[0].anon_id, A);
+  const oneOff = [...byEvent('sign_up'), ...byEvent('sign_in')];
+  assert.equal(oneOff.length, 3);
+  const ids = new Set();
+  for (const r of oneOff) {
+    assert.notEqual(r.anon_id, A);
+    assert.notEqual(r.session_id, S);
+    assert.match(r.anon_id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    ids.add(r.anon_id); ids.add(r.session_id);
+  }
+  assert.equal(ids.size, 6, 'every one-off ID is unique');
+  assert.ok(!JSON.stringify(oneOff).includes(A) && !JSON.stringify(oneOff).includes(S));
+  for (const r of out.rows) assert.deepEqual(Object.keys(r).filter((k) => /time|ts$|created|at$/.test(k)), [], 'no timestamp field in a row');
+});
+
+test('utm values: codes only, nothing with an @ or that looks like an email', () => {
+  const mk = (v) => validateBatch(env({ source: { utm_source: v, utm_medium: v, utm_campaign: v, referrer_domain: v } }), null).rows[0];
+  for (const bad of ['a@b.c', 'user@example.com', 'x@y', '@handle', 'UPPER', 'has space', '']) {
+    const r = mk(bad);
+    assert.deepEqual([r.utm_source, r.utm_medium, r.utm_campaign, r.referrer_domain], [null, null, null, null], bad);
+  }
+  const long = mk('a'.repeat(41));
+  assert.deepEqual([long.utm_source, long.utm_medium, long.utm_campaign], [null, null, null], 'codes are at most 40 characters');
+  const ok = mk('spring_sale-24');
+  assert.deepEqual([ok.utm_source, ok.utm_medium, ok.utm_campaign], ['spring_sale-24', 'spring_sale-24', 'spring_sale-24']);
+});
+
+// ---------- the dashboard read function ----------
+test('analytics-dashboard function: constant-time secret, GET only, fails closed, passes the aggregates through', async () => {
+  const SECRET = 's'.repeat(32);
+  const calls = [];
+  const agg = { generated_at: 'x', apps: [] };
+  const mk = (e = {}) => createDashboardHandler({ env: mkEnv({ ANALYTICS_DASHBOARD_SECRET: SECRET, ...e }), fetch: async (u, i) => { calls.push({ u, i }); return new Response(JSON.stringify(agg), { status: 200 }); } });
+  const get = (headers = {}, method = 'GET') => new Request('https://fn.test/analytics-dashboard', { method, headers });
+  const h = mk();
+  assert.equal((await h(get())).status, 401);
+  assert.equal((await h(get({ 'x-dashboard-secret': 'wrong' }))).status, 401);
+  assert.equal((await h(get({ 'x-dashboard-secret': SECRET.slice(0, -1) }))).status, 401);
+  assert.equal((await h(get({ 'x-dashboard-secret': SECRET }, 'POST'))).status, 405);
+  assert.equal(calls.length, 0, 'no database call without the secret');
+  const ok = await h(get({ 'x-dashboard-secret': SECRET }));
+  assert.equal(ok.status, 200);
+  assert.deepEqual(await ok.json(), agg);
+  assert.equal(calls[0].u, 'https://db.test/rest/v1/rpc/analytics_dashboard');
+  assert.equal(ok.headers.get('access-control-allow-origin'), null, 'no CORS: server to server only');
+  assert.equal((await mk({ ANALYTICS_DASHBOARD_SECRET: '' })(get({ 'x-dashboard-secret': '' }))).status, 503, 'unset secret fails closed');
+  assert.equal((await mk({ ANALYTICS_DASHBOARD_SECRET: 'short' })(get({ 'x-dashboard-secret': 'short' }))).status, 503, 'weak secret fails closed');
+  assert.equal(await secretsEqual('abc', 'abc'), true);
+  assert.equal(await secretsEqual('abc', 'abd'), false);
+  assert.equal(await secretsEqual('', ''), true);
+});
+
+test('function sources: RPC only, no direct table writes, never x-forwarded-for, never logs an IP', () => {
+  const src = ['supabase/functions/events/handler.js', 'supabase/functions/events/core.js', 'supabase/functions/events/index.ts', 'supabase/functions/analytics-dashboard/index.ts'].map(read).join('\n');
+  assert.ok(src.includes('/rest/v1/rpc/analytics_ingest') && src.includes('/rest/v1/rpc/analytics_dashboard'));
   assert.ok(!/rest\/v1\/(?!rpc)/.test(src), 'no direct table REST writes');
+  assert.ok(!/x-forwarded-for/i.test(src.replace(/\/\/.*$/gm, '')), 'x-forwarded-for is only mentioned in comments');
+  assert.ok(!/console\.(log|info|warn|error)\([^)]*\bip\b/.test(src));
   assert.ok(!/body: JSON\.stringify\([^)]*\bip\b/.test(src));
   assert.ok(src.includes('countryFrom(req.headers)'));
-  assert.ok(!/console\.(log|info|warn|error)\([^)]*\bip\b/.test(src), 'IP is never logged');
 });
 
 // ---------- the migration ----------
 const SQL = read('supabase/migrations/20261111000000_analytics_events.sql');
 const tableBodies = [...SQL.matchAll(/create table if not exists analytics\.(\w+) \(([\s\S]*?)\n\);/g)];
+const eventsBody = tableBodies.find(([, n]) => n === 'events')[2];
 
 test('migration: no user_id, email, name or IP column in any analytics table', () => {
   assert.ok(tableBodies.length >= 4);
@@ -229,6 +405,20 @@ test('migration: no user_id, email, name or IP column in any analytics table', (
   assert.ok(!/references\s+auth\.users/i.test(SQL), 'no link to accounts');
 });
 
+test('migration: raw events store a day only: no timestamp column, no sequence order', () => {
+  assert.ok(!/timestamp/i.test(eventsBody), 'no timestamp or timestamptz column in analytics.events');
+  assert.ok(/^\s+day\s+date not null/m.test(eventsBody));
+  assert.ok(!/^\s+created_at\b/m.test(eventsBody));
+  assert.ok(/^\s+id\s+uuid primary key default gen_random_uuid\(\)/m.test(eventsBody), 'random row id, so insertion order is not kept');
+  assert.ok(!/generated always as identity|serial/i.test(eventsBody));
+  const ingest = SQL.slice(SQL.indexOf('create or replace function public.analytics_ingest'), SQL.indexOf('revoke all on function public.analytics_ingest'));
+  assert.ok(/when r\.event in \('sign_up', 'sign_in'\) then gen_random_uuid\(\) else r\.anon_id/.test(ingest), 'the database also replaces the device ID on sign_up/sign_in');
+  assert.ok(/when r\.event in \('sign_up', 'sign_in'\) then gen_random_uuid\(\) else r\.session_id/.test(ingest));
+  const agg = SQL.slice(SQL.indexOf('analytics.aggregate_day(p_day date)'), SQL.indexOf('analytics.purge_raw()'));
+  assert.ok(/event not in \('sign_up', 'sign_in'\) group by app, anon_id/.test(agg), 'users are counted without the one-off rows');
+  assert.ok(!/created_at/.test(SQL.replace(/--.*$/gm, '')));
+});
+
 test('migration: RLS on, no grants to anon or authenticated, ingest only for the service role', () => {
   for (const t of ['events', 'daily_app_stats', 'daily_source_stats', 'aggregate_runs']) assert.ok(SQL.includes(`alter table analytics.${t} enable row level security`), t);
   assert.ok(SQL.includes('revoke all on all tables in schema analytics from public, anon, authenticated'));
@@ -236,37 +426,88 @@ test('migration: RLS on, no grants to anon or authenticated, ingest only for the
   assert.ok(!/grant\s+(select|insert|update|delete|all)[^;]*\bto\s+(anon|authenticated|public)/i.test(SQL));
   assert.ok(SQL.includes('grant execute on function public.analytics_ingest(jsonb) to service_role'));
   assert.ok(SQL.includes('grant execute on function public.analytics_dashboard(int) to service_role'));
-  assert.ok(/analytics_ingest[\s\S]*security definer set search_path = ''/.test(SQL));
 });
 
-test('migration: bounds, allow-list, 13-month retention, nothing scheduled', () => {
+test('migration: every function pins search_path; bounds; 14-month retention; nothing scheduled', () => {
+  const fns = [...SQL.matchAll(/create or replace function ([\w.]+)\([\s\S]*?\n(?:\$\$|end \$\$);/g)].map((m) => m[0]);
+  assert.ok(fns.length >= 5);
+  for (const f of fns) assert.ok(/set search_path = ''/.test(f), f.split('\n')[0]);
   assert.ok(SQL.includes('analytics.json_ok(props)'));
   assert.ok(/<= 8/.test(SQL) && /<= 512/.test(SQL) && />\s*40/.test(SQL));
-  assert.ok(/interval '13 months'/.test(SQL));
+  assert.ok(/interval '14 months'/.test(SQL) && !/13 months/.test(SQL));
   assert.ok(!/cron\.schedule|create extension/i.test(SQL), 'not scheduled, no extensions');
   const apps = SQL.match(/app\s+text not null check \(app in \(([^)]*)\)\)/)[1].replace(/'/g, '').split(',').map((s) => s.trim());
   assert.deepEqual(apps, SCHEMA.apps, 'table and function agree on the app list');
 });
 
-// ---------- privacy page and no third-party tags ----------
-test('privacy page: the guest-ID line is verbatim, hidden by default, and the old sentence stays literally true while counts are off', () => {
+// ---------- privacy page ----------
+// The final privacy wording lives HERE, once. A change in wording is one edit to this list and one edit to privacy/index.html.
+const PRIVACY_HEADING = 'Guest ID and usage counts';
+const PRIVACY_OFF_LINE = 'Usage counts are currently off.';
+const PRIVACY_PARAGRAPHS = [
+  `When usage counts are on, our server records simple events on bobolearns.com, such as opening a page, starting sign-up or signing in, so we can see what is useful. Most events have a random ID for this browser; sign-up and sign-in events get a separate one-off ID instead, so they can't be linked to you. Each event also has the date, the page area, whether you were signed in, where the visit came from (for example a search engine or a link we posted) and your country.`,
+  `The random ID, and a made-up name made from it (for example "Guest Brave-Otter-4821"), are kept in this browser's local storage. They are not made from your IP address and mean nothing outside our tools.`,
+  `We use your IP address only to work out your country. We don't store it in our analytics or guest IDs. Our hosting and database providers keep standard security logs, described above.`,
+  `Your guest ID isn't linked to your account.`,
+  `Event records, including the random ID, are kept for 14 months. Daily totals that contain no IDs may be kept longer.`,
+  `You can turn usage counts off on this device or reset your guest ID with the controls below, or clear this site's data in your browser. If your browser sends Do Not Track or Global Privacy Control, we don't count your visits.`,
+];
+const sectionOf = (html) => html.slice(html.indexOf('<section id="guest-id">'), html.indexOf('</section>', html.indexOf('<section id="guest-id">')));
+
+test('privacy page: the passed wording is in the static HTML, pinned in order, and needs no JavaScript', () => {
   const html = read('privacy/index.html');
-  assert.ok(html.includes("<p>Your guest ID isn't linked to your account.</p>"));
-  assert.match(html, /<section data-analytics-copy id="guest-id" hidden>/);
-  assert.match(html, /<span data-analytics-off-copy>We do not use advertising, analytics or cross-site tracking cookies\.<\/span>/);
+  const sec = sectionOf(html);
+  assert.ok(sec.includes(`<h2>${PRIVACY_HEADING}</h2>`));
+  assert.ok(sec.includes(`<p><strong>${PRIVACY_OFF_LINE}</strong></p>`));
+  let at = sec.indexOf(PRIVACY_OFF_LINE);
+  for (const para of PRIVACY_PARAGRAPHS) {
+    const i = sec.indexOf(`<p>${para}</p>`, at);
+    assert.ok(i > at, `missing or out of order: ${para.slice(0, 50)}`);
+    at = i;
+  }
+  assert.ok(!/\bhidden\b|data-analytics/.test(html), 'nothing hides or swaps text with script');
+  assert.ok(!/TODO/i.test(html), 'no TODO left');
+  assert.ok(html.includes('We do not use advertising, analytics or cross-site tracking cookies.'), 'the cookie sentence is always visible');
+  for (const label of ['Guest name on this device:', 'Turn off usage counts on this device', 'Reset my guest ID']) assert.ok(sec.includes(label), label);
   assert.ok(html.includes('id="anaGuestName"') && html.includes('id="anaOff"') && html.includes('id="anaReset"'));
-  assert.ok(html.includes('/assets/js/bb-analytics.js'), 'the page loads the module that switches the copy');
-  assert.ok(html.includes('Last updated: November 11, 2026'));
+  assert.ok(html.includes('/assets/js/bb-analytics.js'));
 });
 
-test('guard: counts stay OFF while the privacy copy still has a TODO', () => {
+const cfgSource = read('assets/js/config.js');
+const parseCfg = () => { const w = {}; vm.runInNewContext(cfgSource, { window: w }); return w.BOBO_CONFIG; };
+
+test('config: analytics.enabled is exactly false in this PR (parsed, not pattern-matched)', () => {
+  assert.strictEqual(parseCfg().analytics.enabled, false);
+});
+
+test('the page stays true in both states: while off it says so; if a later PR turns counts on it must change those lines', () => {
   const html = read('privacy/index.html');
-  const cfg = read('assets/js/config.js');
-  const enabled = /analytics:\s*\{\s*enabled:\s*true/.test(cfg);
-  if (/TODO\(legal text\)/.test(html)) assert.equal(enabled, false, 'privacy copy is unfinished; do not enable analytics');
-  assert.ok(/analytics:\s*\{\s*enabled:\s*false/.test(cfg) || !/TODO\(legal text\)/.test(html));
+  const on = parseCfg().analytics.enabled === true;
+  if (on) {
+    assert.ok(!html.includes(PRIVACY_OFF_LINE), 'counts are on: remove the "currently off" line');
+    assert.ok(!html.includes('advertising, analytics or cross-site tracking cookies'), 'counts are on: remove "analytics" from the no-analytics sentence');
+  } else {
+    assert.ok(html.includes(PRIVACY_OFF_LINE));
+    assert.ok(html.includes('advertising, analytics or cross-site tracking cookies'));
+  }
 });
 
+test('README lists the exact static edits and the preconditions for enabling', () => {
+  const r = read('supabase/analytics/README.md');
+  for (const needle of ['Usage counts are currently off.', 'We do not use advertising, analytics or cross-site tracking cookies.', 'We do not use advertising or cross-site tracking cookies.', 'aggregate_day', 'purge_raw', 'precondition', 'cf-connecting-ip', 'unverified', 'ANALYTICS_DASHBOARD_SECRET']) assert.ok(r.includes(needle), needle);
+});
+
+test('privacy controls work with the flag off: guest name, off switch and reset', () => {
+  const name = { textContent: '' }, off = { checked: false, listeners: {}, addEventListener(t, f) { this.listeners[t] = f; } }, rst = { listeners: {}, addEventListener(t, f) { this.listeners[t] = f; } };
+  const c = loadClient({ enabled: false, ids: { anaGuestName: name, anaOff: off, anaReset: rst }, storage: { 'bb.anon.v1': A } });
+  assert.equal(name.textContent, 'Guest Jolly-Quokka-5243');
+  off.checked = true; off.listeners.change();
+  assert.equal(c.local.getItem('bb.analytics.off'), '1');
+  assert.equal(c.local.getItem('bb.anon.v1'), null, 'turning off also forgets the ID');
+  assert.equal(name.textContent, 'none yet');
+});
+
+// ---------- no third-party tags; public-repo hygiene ----------
 test('no Google, Meta or other third-party tag or SDK anywhere in the site', () => {
   const files = [];
   const walk = (d) => { for (const f of fs.readdirSync(path.join(ROOT, d), { withFileTypes: true })) { const rel = path.join(d, f.name); if (f.isDirectory()) { if (!['.git', 'node_modules', 'tests'].includes(f.name) && !rel.startsWith('.github')) walk(rel); } else if (/\.(html|js)$/.test(f.name)) files.push(rel); } };
@@ -277,23 +518,14 @@ test('no Google, Meta or other third-party tag or SDK anywhere in the site', () 
   }
 });
 
-test('public repo hygiene: no internal codes, Drive links or private emails in the new files', () => {
-  const files = ['assets/js/bb-analytics.js', 'supabase/functions/events/index.ts', 'supabase/functions/events/core.js', 'supabase/functions/events/schema.js', 'supabase/migrations/20261111000000_analytics_events.sql', 'supabase/analytics/README.md', 'privacy/index.html'];
+test('public repo hygiene: no internal codes, Drive links, private emails or internal names in the new files or this test', () => {
+  const names = new RegExp([['Ni', 'zam'], ['Flor', 'ence'], ['Al-', 'Jazari'], ['Mis', 'ha\\b'], ['Bab', "ar's"], ['Zir', 'yab'], ['Ibn ', 'Sina']].map((p) => p.join('')).join('|'));
+  const files = ['assets/js/bb-analytics.js', 'supabase/functions/events/index.ts', 'supabase/functions/events/core.js', 'supabase/functions/events/handler.js', 'supabase/functions/events/schema.js', 'supabase/functions/analytics-dashboard/index.ts', 'supabase/migrations/20261111000000_analytics_events.sql', 'supabase/analytics/README.md', 'privacy/index.html', '.github/tests/analytics.test.mjs'];
   for (const f of files) {
     const s = read(f);
     assert.ok(!/\b(BD|D|S|A)-[A-Z]*-?\d{2,4}\b/.test(s), `${f}: internal code`);
     assert.ok(!/docs\.google\.com|drive\.google\.com/.test(s), `${f}: Drive link`);
     assert.ok(!/@gmail\.com/.test(s.replace(/machinemisha@gmail\.com/g, '')), `${f}: email`);
-    assert.ok(!/Nizam|Florence|Al-Jazari|Misha\b|Babar's/.test(s.replace(/A project by[^<]*/g, '')), `${f}: internal name`);
+    assert.ok(!names.test(s.replace(/A project by[^<]*/g, '')), `${f}: internal name`);
   }
-});
-
-test('privacy page script: copy switches only when counts are on', () => {
-  const mk = () => ({ '[data-analytics-copy]': [{ hidden: true }], '[data-analytics-off-copy]': [{ hidden: false }] });
-  const on = mk(); loadClient({ nodes: on });
-  assert.equal(on['[data-analytics-copy]'][0].hidden, false);
-  assert.equal(on['[data-analytics-off-copy]'][0].hidden, true);
-  const off = mk(); loadClient({ enabled: false, nodes: off });
-  assert.equal(off['[data-analytics-copy]'][0].hidden, true);
-  assert.equal(off['[data-analytics-off-copy]'][0].hidden, false);
 });

@@ -5,7 +5,7 @@
  * from that ID, and sends a few allow-listed events to our own server. It never sends an email, a name, free text,
  * a location or an account ID, and the guest ID is never joined to an account.
  *
- * It does nothing unless BOBO_CONFIG.analytics.enabled is true (currently false), and nothing if the visitor has
+ * It sends nothing unless BOBO_CONFIG.analytics.enabled is true (currently false), and nothing if the visitor has
  * turned it off here, or their browser sends Do Not Track or Global Privacy Control.
  *
  * No third-party tags. The SCHEMA below must equal supabase/functions/events/schema.js (a test checks it).
@@ -53,7 +53,7 @@
   }
 
   // Guest name from the ID: adjective + animal + 4 digits. The same ID always gives the same name; the name means nothing outside our tools.
-  var ADJ = ["Amber", "Bold", "Brisk", "Calm", "Clever", "Cosmic", "Crisp", "Dapper", "Eager", "Fuzzy", "Gentle", "Golden", "Happy", "Jolly", "Keen", "Lucky", "Mellow", "Nimble", "Plucky", "Quiet", "Rosy", "Sunny", "Swift", "Teal"];
+  var ADJ = ["Amber", "Brave", "Brisk", "Calm", "Clever", "Cosmic", "Crisp", "Dapper", "Eager", "Fuzzy", "Gentle", "Golden", "Happy", "Jolly", "Keen", "Lucky", "Mellow", "Nimble", "Plucky", "Quiet", "Rosy", "Sunny", "Swift", "Teal"];
   var ANIMAL = ["Badger", "Beaver", "Corgi", "Dolphin", "Falcon", "Ferret", "Fox", "Gecko", "Heron", "Koala", "Lemur", "Llama", "Lynx", "Otter", "Panda", "Puffin", "Quokka", "Raccoon", "Robin", "Seal", "Tiger", "Turtle", "Walrus", "Yak"];
   function fnv1a(str) {
     var h = 0x811c9dc5;
@@ -111,6 +111,9 @@
     return out;
   }
 
+  // Schema maps are read with hasOwn so "constructor", "__proto__" or "toString" never reach Object.prototype.
+  function own(obj, key) { return typeof key === "string" && Object.prototype.hasOwnProperty.call(obj, key) ? obj[key] : undefined; }
+
   function propOk(spec, v) {
     if (!spec) { return false; }
     if (spec.enum) { return spec.enum.indexOf(v) !== -1; }
@@ -119,13 +122,13 @@
   }
   // Keeps an event only if every prop is on its allow-list with an allowed value. Anything else drops the whole event.
   function cleanProps(event, props) {
-    var def = SCHEMA.events[event];
+    var def = own(SCHEMA.events, event);
     if (!def || (def.apps && def.apps.indexOf(cfg.app) === -1)) { return null; }
     props = props || {};
     var clean = {};
     for (var k in props) {
       if (!Object.prototype.hasOwnProperty.call(props, k)) { continue; }
-      if (!propOk(def.props[k], props[k])) { return null; }
+      if (!propOk(own(def.props, k), props[k])) { return null; }
       clean[k] = props[k];
     }
     for (var r in (def.required || {})) { if (clean[r] !== def.required[r]) { return null; } }
@@ -170,11 +173,8 @@
     reset: reset, setOff: setOff, isActive: active, optedOut: optedOut
   };
 
-  // Privacy page: when counts are switched on, show the matching copy and controls and hide the "we do not use analytics" copy.
+  // Privacy page controls (work whether or not counts are on): show this device's guest name, turn counts off, reset the ID.
   function privacyPage() {
-    if (cfg.enabled !== true) { return; }
-    document.querySelectorAll("[data-analytics-copy]").forEach(function (n) { n.hidden = false; });
-    document.querySelectorAll("[data-analytics-off-copy]").forEach(function (n) { n.hidden = true; });
     var nameEl = document.getElementById("anaGuestName");
     var offBox = document.getElementById("anaOff");
     var resetBtn = document.getElementById("anaReset");

@@ -9,8 +9,6 @@
 
 5. The retired contact address must not appear in public pages or in assets/js/config.js.
 
-6. The analytics tests pass (node --test .github/tests/analytics.test.mjs).
-
 Run from the repo root: python3 .github/scripts/check_site.py
 """
 import json
@@ -153,10 +151,10 @@ def check_analytics_tests():
 
 def main():
     check_html()
-    check_analytics_tests()
     check_sites_json()
     check_sitemap()
     check_contact()
+    check_analytics_tests()
     if errors:
         print(f"{len(errors)} problem(s) found:")
         for e in errors:

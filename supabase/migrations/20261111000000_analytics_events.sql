@@ -6,14 +6,17 @@
 --  * There is NO user_id (or email, name, IP) column anywhere. An anon_id is never joined to an account.
 --  * props is a flat JSON object with bounded size and count (analytics.json_ok); the function also checks a per-event allow-list.
 --  * country comes from the edge header; the IP is never stored.
---  * Raw events are kept 13 months (analytics.purge_raw); daily aggregates are kept.
+--  * No time of day is stored: each event has a calendar day only (UTC). Rows for sign_up and sign_in carry a fresh random
+--    id instead of the device ID (and a random session id), so a sign-up cannot be matched to the visits before it.
+--    Sign-ups are counted as events, not per ID. The row id is a random uuid, not a sequence, so insertion order is not kept.
+--  * Raw events are kept 14 months (analytics.purge_raw); daily aggregates are kept.
 
 create schema if not exists analytics;
 revoke all on schema analytics from public, anon, authenticated;
 
 -- Size and number bounds for props: a flat object, at most 8 keys, scalar values, strings at most 40 chars, 512 chars in all.
 create or replace function analytics.json_ok(j jsonb) returns boolean
-language sql immutable as $$
+language sql immutable set search_path = '' as $$
   select j is not null
      and jsonb_typeof(j) = 'object'
      and length(j::text) <= 512
@@ -26,8 +29,8 @@ language sql immutable as $$
 $$;
 
 create table if not exists analytics.events (
-  id              bigint generated always as identity primary key,
-  created_at      timestamptz not null default now(),
+  id              uuid primary key default gen_random_uuid(),
+  day             date not null default ((now() at time zone 'UTC')::date),
   app             text not null check (app in ('hub', 'ruffspeak', 'chess', 'ridgeline', 'bbsite')),
   event           text not null check (event ~ '^[a-z][a-z0-9_]{1,39}$'),
   anon_id         uuid not null,
@@ -44,8 +47,8 @@ create table if not exists analytics.events (
 comment on table analytics.events is
   'First-party guest and usage events. No user_id, email, name or IP by design: the anon_id is a random per-device UUID and is never joined to an account.';
 
-create index if not exists events_created_idx on analytics.events (created_at);
-create index if not exists events_app_day_idx on analytics.events (app, created_at, event);
+create index if not exists events_day_idx on analytics.events (day);
+create index if not exists events_app_day_idx on analytics.events (app, day, event);
 
 -- Aggregates (counts only). The dashboard reads only these.
 create table if not exists analytics.daily_app_stats (
@@ -92,7 +95,8 @@ alter table analytics.aggregate_runs enable row level security;
 revoke all on all tables in schema analytics from public, anon, authenticated;
 
 -- The one way in. SECURITY DEFINER so the function can insert without any table grant; callable only by the service role
--- (the Edge Function). Takes an array of at most 40 rows already checked by the function; the table checks run again here.
+-- (the Edge Function). sign_up and sign_in rows never keep the device ID (replaced here as well as in the function).
+-- Takes an array of at most 40 rows already checked by the function; the table checks run again here.
 create or replace function public.analytics_ingest(p_rows jsonb) returns int
 language plpgsql security definer set search_path = '' as $$
 declare v_n int;
@@ -102,7 +106,10 @@ begin
   end if;
   insert into analytics.events (app, event, anon_id, session_id, platform, app_version, country,
                                 utm_source, utm_medium, utm_campaign, referrer_domain, props)
-  select r.app, r.event, r.anon_id, r.session_id, r.platform, r.app_version, r.country,
+  select r.app, r.event,
+         case when r.event in ('sign_up', 'sign_in') then gen_random_uuid() else r.anon_id end,
+         case when r.event in ('sign_up', 'sign_in') then gen_random_uuid() else r.session_id end,
+         r.platform, r.app_version, r.country,
          r.utm_source, r.utm_medium, r.utm_campaign, r.referrer_domain, coalesce(r.props, '{}'::jsonb)
   from jsonb_to_recordset(p_rows) as r(app text, event text, anon_id uuid, session_id uuid, platform text, app_version text,
                                        country text, utm_source text, utm_medium text, utm_campaign text,
@@ -114,13 +121,11 @@ revoke all on function public.analytics_ingest(jsonb) from public, anon, authent
 grant execute on function public.analytics_ingest(jsonb) to service_role;
 
 -- Nightly job, written as a file and NOT scheduled. Idempotent: running a day twice gives the same rows.
--- Usage (by an operator or a scheduler Babar approves): select analytics.aggregate_day(current_date - 1);
+-- Usage (by an operator or a scheduler the owner approves): select analytics.aggregate_day(current_date - 1);
+-- Users are counted per device ID from every event except sign_up and sign_in (those rows carry random ids), so
+-- sign-ups are counted as events: a sign-up is never matched to a device.
 create or replace function analytics.aggregate_day(p_day date) returns void
-language plpgsql as $$
-declare
-  t1 timestamptz := (p_day + 1)::timestamp at time zone 'UTC';
-  t0 timestamptz := p_day::timestamp at time zone 'UTC';
-  tw timestamptz := t1 - interval '30 days';
+language plpgsql set search_path = '' as $$
 begin
   delete from analytics.daily_app_stats where day = p_day;
   delete from analytics.daily_source_stats where day = p_day;
@@ -128,14 +133,18 @@ begin
   insert into analytics.daily_app_stats
     (day, app, dau, wau, mau, guest_dau, guest_wau, guest_mau, signups_1d, signups_7d, signups_30d, signins_1d,
      funnel_app_open, funnel_guest, funnel_popup, funnel_signup_start, funnel_sign_up, top_events)
-  with per as (
+  with win as (
+    select * from analytics.events where day > p_day - 30 and day <= p_day
+  ), apps as (
+    select distinct app from win
+  ), per as (
     select app, anon_id,
-      bool_or(created_at >= t1 - interval '1 day')  as in1,
-      bool_or(created_at >= t1 - interval '7 days') as in7,
-      bool_or(created_at >= t1 - interval '1 day'  and props ->> 'auth_state' = 'member') as m1,
-      bool_or(created_at >= t1 - interval '7 days' and props ->> 'auth_state' = 'member') as m7,
+      bool_or(day = p_day) as in1,
+      bool_or(day > p_day - 7) as in7,
+      bool_or(day = p_day and props ->> 'auth_state' = 'member') as m1,
+      bool_or(day > p_day - 7 and props ->> 'auth_state' = 'member') as m7,
       bool_or(props ->> 'auth_state' = 'member') as m30
-    from analytics.events where created_at >= tw and created_at < t1 group by app, anon_id
+    from win where event not in ('sign_up', 'sign_in') group by app, anon_id
   ), users as (
     select app,
       count(*) filter (where in1) as dau, count(*) filter (where in7) as wau, count(*) as mau,
@@ -145,36 +154,36 @@ begin
     from per group by app
   ), ev as (
     select app,
-      count(*) filter (where event = 'sign_up' and created_at >= t1 - interval '1 day')  as s1,
-      count(*) filter (where event = 'sign_up' and created_at >= t1 - interval '7 days') as s7,
+      count(*) filter (where event = 'sign_up' and day = p_day) as s1,
+      count(*) filter (where event = 'sign_up' and day > p_day - 7) as s7,
       count(*) filter (where event = 'sign_up') as s30,
-      count(*) filter (where event = 'sign_in' and created_at >= t1 - interval '1 day') as si1,
-      count(distinct anon_id) filter (where event = 'app_open' and created_at >= t0) as f_open,
-      count(distinct anon_id) filter (where event = 'guest_continue' and created_at >= t0) as f_guest,
-      count(distinct anon_id) filter (where event = 'guest_popup_seen' and created_at >= t0) as f_popup,
-      count(distinct anon_id) filter (where event = 'signup_start' and created_at >= t0) as f_start,
-      count(distinct anon_id) filter (where event = 'sign_up' and created_at >= t0) as f_signup
-    from analytics.events where created_at >= tw and created_at < t1 group by app
+      count(*) filter (where event = 'sign_in' and day = p_day) as si1,
+      count(distinct anon_id) filter (where event = 'app_open' and day = p_day) as f_open,
+      count(distinct anon_id) filter (where event = 'guest_continue' and day = p_day) as f_guest,
+      count(distinct anon_id) filter (where event = 'guest_popup_seen' and day = p_day) as f_popup,
+      count(distinct anon_id) filter (where event = 'signup_start' and day = p_day) as f_start,
+      count(*) filter (where event = 'sign_up' and day = p_day) as f_signup
+    from win group by app
   ), top as (
-    select app, jsonb_agg(jsonb_build_object('event', event, 'n', n) order by n desc, event) as top_events
+    select app, jsonb_agg(jsonb_build_object('event', event, 'n', cnt) order by cnt desc, event) as top_events
     from (
-      select app, event, count(*)::int as n, row_number() over (partition by app order by count(*) desc, event) as rn
-      from analytics.events
-      where created_at >= t0 and created_at < t1
-        and event not in ('app_open', 'guest_continue', 'guest_popup_seen', 'signup_start', 'sign_up', 'sign_in')
+      select app, event, count(*)::int as cnt, row_number() over (partition by app order by count(*) desc, event) as rn
+      from win
+      where day = p_day and event not in ('app_open', 'guest_continue', 'guest_popup_seen', 'signup_start', 'sign_up', 'sign_in')
       group by app, event
     ) x where rn <= 5 group by app
   )
-  select p_day, u.app, u.dau, u.wau, u.mau, u.guest_dau, u.guest_wau, u.guest_mau,
+  select p_day, a.app, coalesce(u.dau, 0), coalesce(u.wau, 0), coalesce(u.mau, 0),
+         coalesce(u.guest_dau, 0), coalesce(u.guest_wau, 0), coalesce(u.guest_mau, 0),
          ev.s1, ev.s7, ev.s30, ev.si1, ev.f_open, ev.f_guest, ev.f_popup, ev.f_start, ev.f_signup,
          coalesce(top.top_events, '[]'::jsonb)
-  from users u join ev using (app) left join top using (app);
+  from apps a join ev using (app) left join users u using (app) left join top using (app);
 
   -- Source = utm_source, else the referrer domain, else 'direct'. Visits are app_open events; signups are sign_up events.
   insert into analytics.daily_source_stats (day, app, source, visits, signups)
   select p_day, app, coalesce(utm_source, referrer_domain, 'direct') as source,
          count(*) filter (where event = 'app_open'), count(*) filter (where event = 'sign_up')
-  from analytics.events where created_at >= t0 and created_at < t1 and event in ('app_open', 'sign_up')
+  from analytics.events where day = p_day and event in ('app_open', 'sign_up')
   group by 1, 2, 3;
 
   insert into analytics.aggregate_runs (day, ran_at, app_rows)
@@ -183,12 +192,12 @@ begin
 end $$;
 revoke all on function analytics.aggregate_day(date) from public, anon, authenticated;
 
--- Retention: raw events are kept 13 months; aggregates are kept. Not scheduled.
+-- Retention: raw events are kept 14 months; aggregates are kept. Not scheduled (scheduling it is a precondition for enabling).
 create or replace function analytics.purge_raw() returns int
-language plpgsql as $$
+language plpgsql set search_path = '' as $$
 declare v_n int;
 begin
-  delete from analytics.events where created_at < now() - interval '13 months';
+  delete from analytics.events where day < ((now() at time zone 'UTC')::date - interval '14 months')::date;
   get diagnostics v_n = row_count;
   return v_n;
 end $$;
