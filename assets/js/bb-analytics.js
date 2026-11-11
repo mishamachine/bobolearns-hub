@@ -181,7 +181,19 @@
     function paint() {
       var id = anonId(false);
       if (nameEl) { nameEl.textContent = id ? guestName(id) : "none yet"; }
-      if (offBox) { offBox.checked = optedOut(); }
+      if (offBox) {
+        var nav = window.navigator || {};
+        var browserOff = nav.doNotTrack === "1" || window.doNotTrack === "1" || nav.globalPrivacyControl === true;
+        offBox.checked = optedOut();
+        offBox.disabled = browserOff;
+        var note = document.getElementById("anaOffNote");
+        if (browserOff && !note) {
+          note = document.createElement("p");
+          note.id = "anaOffNote";
+          note.textContent = "Your browser's Do Not Track / Global Privacy Control setting keeps this off.";
+          offBox.closest("p").insertAdjacentElement("afterend", note);
+        }
+      }
     }
     if (offBox) { offBox.addEventListener("change", function () { setOff(offBox.checked); paint(); }); }
     if (resetBtn) { resetBtn.addEventListener("click", function () { reset(); paint(); }); }

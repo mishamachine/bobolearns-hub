@@ -460,7 +460,7 @@ test('migration: every function pins search_path; bounds; 14-month retention; no
 const PRIVACY_HEADING = 'Guest ID and usage counts';
 const PRIVACY_OFF_LINE = 'Usage counts are currently off.';
 const PRIVACY_PARAGRAPHS = [
-  `When usage counts are on, our server records simple events on bobolearns.com, such as opening a page, starting sign-up or signing in, so we can see what is useful. Most events have a random ID for this browser, the date, the page area, whether you were signed in, where the visit came from (for example a search engine or a link we posted) and your country. Sign-up, sign-in and progress-moving events instead get a separate one-off ID and keep only the date and page area, so they can't be linked to you.`,
+  `When usage counts are on, our server records simple events on bobolearns.com, such as opening a page, starting sign-up or signing in, so we can see what is useful. Most events have a random ID for this browser, the date, the page area, whether you were signed in, where the visit came from (for example a search engine or a link we posted) and your country. Sign-up, sign-in and progress-moving events instead get a separate one-off ID and keep only the date and page area, so they aren't stored with your guest ID.`,
   `The random ID, and a made-up name made from it (for example "Guest Brave-Otter-4821"), are kept in this browser's local storage. They are not made from your IP address and mean nothing outside our tools.`,
   `We use your IP address only to work out your country and, briefly, to stop abuse. We don't store it in our analytics or guest IDs. Our hosting and database providers keep standard security logs, described above.`,
   `Your guest ID isn't linked to your account.`,
@@ -592,4 +592,16 @@ test('migration in PGlite: one-off rows are stripped, users exclude them, small 
   assert.equal(src.facebook, 8);
   assert.ok(!('tiny' in src) && !('direct' in src), 'sources under 5 are folded, not listed');
   assert.equal(src.other, 5, 'direct (4) and tiny (1) fold into other');
+});
+
+test('requests with no IP skip the per-IP table and share a high global cap', async () => {
+  let t = 1_000_000;
+  const lim = createLimiter({ secret: 't', now: () => t, perMinute: 2, noIpPerMinute: 5 });
+  const res = [];
+  for (let i = 0; i < 7; i++) res.push(await lim.limited('no-ip'));
+  assert.deepEqual(res, [false, false, false, false, false, true, true], 'per-IP limit of 2 does not apply; global cap of 5 does');
+  assert.equal(lim.size(), 0, 'no per-IP entry was made');
+  assert.equal(await lim.limited('203.0.113.9'), false, 'a real address is unaffected');
+  t += 61_000;
+  assert.equal(await lim.limited('no-ip'), false, 'the window slides');
 });

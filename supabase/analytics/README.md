@@ -32,7 +32,8 @@ State: code and SQL only. Nothing is applied, deployed or switched on. `assets/j
 ## Preconditions for enabling (none are done)
 1. Scheduling is a precondition: `select analytics.aggregate_day(current_date - 1);` nightly and `select analytics.purge_raw();` monthly, by a scheduler the owner approves. Without `purge_raw` the 14-month sentence on the privacy page would be untrue; without `aggregate_day` the dashboard shows nothing.
 2. Apply the migration to the shared Supabase project.
-3. Deploy: `supabase functions deploy events --no-verify-jwt` (the browser posts text/plain with no auth header) and `supabase functions deploy analytics-dashboard --no-verify-jwt`.
+3. Precondition before switching the flag on: verify `cf-connecting-ip` is present on Supabase Edge (and `cf-ipcountry`). Without it every request is "no-ip", per-IP limiting is off and only a global cap of 600 requests a minute applies.
+   Deploy: `supabase functions deploy events --no-verify-jwt` (the browser posts text/plain with no auth header) and `supabase functions deploy analytics-dashboard --no-verify-jwt`.
 4. Secrets: `ANALYTICS_DASHBOARD_SECRET` (random, at least 24 characters; the same value goes in the dashboard proxy). Optional: `ANALYTICS_RL_SECRET` (shares the limiter key between instances), `EVENTS_DISABLED=1` (stop writing), `EVENTS_DEV_ORIGINS=1` (accept http://localhost; development only, never production).
 5. The enabling PR must make exactly these static edits in `privacy/index.html`, because the page must be true without JavaScript:
    - In section 3, change `We do not use advertising, analytics or cross-site tracking cookies.` to `We do not use advertising or cross-site tracking cookies.`
@@ -41,7 +42,7 @@ State: code and SQL only. Nothing is applied, deployed or switched on. `assets/j
    A test fails if the flag is on and either old line is still there (or if it is off and either is missing).
 
 ## Roll back
-Set `analytics.enabled` to `false` (the site goes quiet at once, and put the two static lines back), set `EVENTS_DISABLED=1`, or delete the functions. To remove the data: `drop schema analytics cascade; drop function public.analytics_ingest(jsonb); drop function public.analytics_dashboard(int);`.
+Set `analytics.enabled` to `false` (the site goes quiet at once, and put the two static lines back), set `EVENTS_DISABLED=1`, or delete the functions. To remove the data, run `supabase/analytics/rollback.sql` (drops the two public functions and `schema analytics cascade`).
 
 ## Adding an event or an app
 Change the allow-list in both `_shared/schema.js` and `assets/js/bb-analytics.js` (a test fails if they differ), and the app list in the migration's check constraint. Prop names containing words like email, name, text, location, verse, document, camera, speech or chat are refused by test and by the function.

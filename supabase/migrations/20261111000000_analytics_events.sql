@@ -31,6 +31,7 @@ language sql immutable set search_path = '' as $$
           or (jsonb_typeof(e.value) = 'string' and length(e.value #>> '{}') > 40)
      );
 $$;
+revoke all on function analytics.json_ok(jsonb) from public, anon, authenticated;
 
 create table if not exists analytics.events (
   id              uuid primary key default gen_random_uuid(),
@@ -244,9 +245,9 @@ language sql security definer set search_path = '' stable as $$
                                 from jsonb_array_elements(s.top_events) with ordinality as x(t, ord)), '[]'::jsonb)
       ) order by s.app)
       from analytics.daily_app_stats s where s.day = (select d from last)), '[]'::jsonb),
-    'series', coalesce((select jsonb_agg(jsonb_build_object('day', d.day, 'app', d.app, 'dau', d.dau, 'guest_dau', d.guest_dau) order by d.day, d.app)
-                        from analytics.daily_app_stats d
-                        where d.day > (select d from last) - greatest(least(p_days, 60), 1)), '[]'::jsonb),
+    'series', coalesce((select jsonb_agg(jsonb_build_object('day', ds.day, 'app', ds.app, 'dau', ds.dau, 'guest_dau', ds.guest_dau) order by ds.day, ds.app)
+                        from analytics.daily_app_stats ds
+                        where ds.day > (select d from last) - greatest(least(p_days, 60), 1)), '[]'::jsonb),
     'sources', coalesce((
       select jsonb_agg(jsonb_build_object('app', f.app, 'source', f.source, 'visits', f.visits) order by f.app, f.visits desc, f.source)
       from (
