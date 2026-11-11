@@ -8,7 +8,7 @@
  * It sends nothing unless BOBO_CONFIG.analytics.enabled is true (currently false), and nothing if the visitor has
  * turned it off here, or their browser sends Do Not Track or Global Privacy Control.
  *
- * No third-party tags. The SCHEMA below must equal supabase/functions/events/schema.js (a test checks it).
+ * No third-party tags. The SCHEMA below must equal supabase/functions/_shared/schema.js (a test checks it).
  */
 (function () {
   "use strict";
@@ -22,9 +22,9 @@
       guest_continue: { props: { surface: { re: "^[a-z][a-z0-9_-]{0,31}$" } } },
       guest_popup_seen: { props: { surface: { re: "^[a-z][a-z0-9_-]{0,31}$" } } },
       signup_start: { props: { method: { enum: ["email", "google", "apple"] }, surface: { re: "^[a-z][a-z0-9_-]{0,31}$" } } },
-      sign_up: { props: { auth_state: { enum: ["guest"] }, method: { enum: ["email", "google", "apple"] } }, required: { auth_state: "guest" } },
-      sign_in: { props: { method: { enum: ["email", "google", "apple"] } } },
-      guest_progress_moved: { props: {} },
+      sign_up: { props: { auth_state: { enum: ["guest"] }, method: { enum: ["email", "google", "apple"] }, surface: { re: "^[a-z][a-z0-9_-]{0,31}$" } }, required: { auth_state: "guest" } },
+      sign_in: { props: { method: { enum: ["email", "google", "apple"] }, surface: { re: "^[a-z][a-z0-9_-]{0,31}$" } } },
+      guest_progress_moved: { props: { surface: { re: "^[a-z][a-z0-9_-]{0,31}$" } } },
       site_open: { props: { slug: { re: "^[a-z0-9-]{1,32}$" } }, apps: ["hub"] }
     }
   };

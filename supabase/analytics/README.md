@@ -4,18 +4,21 @@ State: code and SQL only. Nothing is applied, deployed or switched on. `assets/j
 
 ## What it is
 - A random per-device ID (UUID v4, in this browser's local storage) and a guest name derived from it by hash (adjective-animal-4 digits). Never from an IP address. Never an account or login ID.
-- Events are sent only to our own Edge Function `events`, which checks each one against an allow-list (`supabase/functions/events/schema.js`) and inserts through `public.analytics_ingest()`.
+- Events are sent only to our own Edge Function `events`, which checks each one against an allow-list (`supabase/functions/_shared/schema.js`) and inserts through `public.analytics_ingest()`.
 - No row holds both a guest ID and an account ID. There is no user_id column, no identify call and no account-linked event.
-- No time of day is stored: every raw event has a calendar day (UTC) only. `sign_up` and `sign_in` rows carry a fresh random ID (and a random session ID) instead of the device ID, replaced in the function and again in the database. Sign-ups are therefore counted as events, never per ID. The row id is a random uuid, not a sequence. (Physical row order inside Postgres is not controlled by this code.)
+- No time of day is stored: every raw event has a calendar day (UTC) only. The row id is a random uuid, not a sequence. (Physical row order inside Postgres is not controlled by this code.)
+- Events at or next to account creation or linking (`signup_start`, `sign_up`, `sign_in`, `guest_progress_moved`) store ONLY the event name, the app, the day, the page area and fresh random IDs. The device ID, session ID, platform, app version, utm tags, referrer, country, method and auth_state are dropped, in the function and again in the database. They are counted as events, never per ID, so **sign-ups are not recorded by method, source or country**, only in total.
 - Country comes from the edge header. The IP is never stored by this code (the host and Supabase keep their own logs, which the privacy page discloses). Rate limiting uses a hash of the IP under a key that changes every UTC day and is held only in memory.
 - Raw events are kept 14 months (`analytics.purge_raw()`); daily aggregates (no IDs) are kept.
+- The dashboard read hides small cells: counts of 1 to 4 (sign-ups, funnel steps, top events) show as "<5", and sources with fewer than 5 visits in the window are folded into "other". Headline active-user counts are unchanged.
 - No Google, Meta or other third-party tag.
 
 ## Files
 | File | Purpose |
 |---|---|
 | `migrations/20261111000000_analytics_events.sql` | schema `analytics`, tables, `analytics.json_ok`, `public.analytics_ingest`, `analytics.aggregate_day`, `analytics.purge_raw`, `public.analytics_dashboard` |
-| `functions/events/` | ingest: `index.ts` (wiring), `handler.js` (request handling), `core.js` (validation, limiter), `schema.js` (allow-list) |
+| `functions/events/index.ts` | ingest wiring |
+| `functions/_shared/` | `handler.js` (request handling), `core.js` (validation, limiter), `schema.js` (allow-list), imported by both functions |
 | `functions/analytics-dashboard/index.ts` | read side for the Board Room proxy: checks a shared secret in constant time, then calls `public.analytics_dashboard()` with the service role that stays here |
 | `assets/js/bb-analytics.js` | the browser module (ID, guest name, `track`, off switch, DNT/GPC) |
 | `.github/tests/analytics.test.mjs` | tests for all of the above, run by `.github/scripts/check_site.py` |
@@ -41,4 +44,4 @@ State: code and SQL only. Nothing is applied, deployed or switched on. `assets/j
 Set `analytics.enabled` to `false` (the site goes quiet at once, and put the two static lines back), set `EVENTS_DISABLED=1`, or delete the functions. To remove the data: `drop schema analytics cascade; drop function public.analytics_ingest(jsonb); drop function public.analytics_dashboard(int);`.
 
 ## Adding an event or an app
-Change the allow-list in both `schema.js` and `assets/js/bb-analytics.js` (a test fails if they differ), and the app list in the migration's check constraint. Prop names containing words like email, name, text, location, verse, document, camera, speech or chat are refused by test and by the function.
+Change the allow-list in both `_shared/schema.js` and `assets/js/bb-analytics.js` (a test fails if they differ), and the app list in the migration's check constraint. Prop names containing words like email, name, text, location, verse, document, camera, speech or chat are refused by test and by the function.

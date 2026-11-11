@@ -8,9 +8,10 @@ const PROD_ORIGIN = /^https:\/\/([a-z0-9-]+\.)?bobolearns\.com$/;
 const DEV_ORIGINS = [/^http:\/\/localhost(:\d+)?$/, /^http:\/\/127\.0\.0\.1(:\d+)?$/];
 export const originAllowed = (origin, allowDev = false) => !!origin && (PROD_ORIGIN.test(origin) || (allowDev && DEV_ORIGINS.some((r) => r.test(origin))));
 
-// Sign-up and sign-in rows never keep the device ID or the session ID: the server gives each a fresh random one,
-// so a sign-up cannot be matched to the visits before it. Sign-ups are counted as events.
-export const ONE_OFF_ID_EVENTS = ['sign_up', 'sign_in'];
+// Events at or next to account creation or linking. Their rows store ONLY the event name, the app, the day, the page area
+// (props.surface) and fresh random IDs: no device ID, session ID, platform, app version, source, referrer, country, method
+// or auth_state. So they cannot be matched to the same device's other rows. They are counted as events, never per ID.
+export const ONE_OFF_ID_EVENTS = ['signup_start', 'sign_up', 'sign_in', 'guest_progress_moved'];
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const TAG = /^[a-z0-9_-]{1,40}$/;
@@ -58,6 +59,7 @@ const tagOrNull = (v) => (typeof v === 'string' && !v.includes('@') && TAG.test(
 // body: { app, anon_id, session_id, platform, app_version, source:{utm_source,utm_medium,utm_campaign,referrer_domain}, events:[{event, props}] }
 // Returns { error } for a bad envelope or when no event passes; otherwise { rows, rejected }.
 // A row never has a user_id, an IP, a time of day or free text. Its shape is what public.analytics_ingest takes.
+// Rows for ONE_OFF_ID_EVENTS are reduced to the minimum (see above).
 export function validateBatch(body, country) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return { error: 'bad_request' };
   if (!SCHEMA.apps.includes(body.app)) return { error: 'bad_app' };
@@ -80,12 +82,15 @@ export function validateBatch(body, country) {
   for (const e of body.events) {
     const def = e && typeof e === 'object' ? own(SCHEMA.events, e.event) : undefined;
     if (!def || (def.apps && !def.apps.includes(body.app)) || !propsOk(def, e.props)) { rejected++; continue; }
-    const oneOff = ONE_OFF_ID_EVENTS.includes(e.event);
-    rows.push({
-      ...common, event: e.event, props: e.props || {},
-      anon_id: oneOff ? crypto.randomUUID() : anon,
-      session_id: oneOff ? crypto.randomUUID() : session,
-    });
+    if (ONE_OFF_ID_EVENTS.includes(e.event)) {
+      const props = e.props && typeof e.props.surface === 'string' ? { surface: e.props.surface } : {};
+      rows.push({
+        app: body.app, event: e.event, props, anon_id: crypto.randomUUID(), session_id: crypto.randomUUID(),
+        platform: null, app_version: null, country: null, utm_source: null, utm_medium: null, utm_campaign: null, referrer_domain: null,
+      });
+      continue;
+    }
+    rows.push({ ...common, event: e.event, props: e.props || {}, anon_id: anon, session_id: session });
   }
   if (!rows.length) return { error: 'no_valid_events', rejected };
   return { rows, rejected };
@@ -94,7 +99,8 @@ export function validateBatch(body, country) {
 // Rate limiting keyed by an HMAC of the IP with a key that changes every UTC day. The key lives only in memory
 // (set ANALYTICS_RL_SECRET to share it between instances; otherwise each instance makes its own random one).
 // Yesterday's key and table are dropped, so yesterday's hashes can never be matched to an address. Nothing is written anywhere.
-// When the table is full, expired entries go first, then the least recently seen one: the cap never resets anyone's count.
+// When the table is full, expired entries go first, then the least recently seen one. An overflow therefore drops only the
+// oldest entries (a client dropped while still active starts a fresh count: best effort, bounded by the table size).
 export function createLimiter({ secret, now = () => Date.now(), perMinute = LIMITS.perMinute, maxTracked = LIMITS.maxTracked }) {
   let day = '';
   let key = null;

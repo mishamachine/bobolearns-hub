@@ -66,7 +66,7 @@
       : sb.auth.signUp({ email: email, password: password, options: { emailRedirectTo: dest } });
     req.then(function (res) {
       if (res.error) { throw res.error; }
-      count(mode === "signin" ? "sign_in" : "sign_up", mode === "signin" ? { method: "email" } : { auth_state: "guest", method: "email" });
+      count(mode === "signin" ? "sign_in" : "sign_up", mode === "signin" ? { method: "email", surface: "login" } : { auth_state: "guest", method: "email", surface: "login" });
       if (res.data && res.data.session) { location.assign(dest); return; }
       busy(false);
       msg("Almost there. We sent a confirmation link to " + email + ". Open it to finish signing up.", "ok");

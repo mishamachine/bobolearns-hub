@@ -9,10 +9,10 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
-const { SCHEMA, BANNED_PROP_WORDS } = await import(path.join(ROOT, 'supabase/functions/events/schema.js'));
-const core = await import(path.join(ROOT, 'supabase/functions/events/core.js'));
+const { SCHEMA, BANNED_PROP_WORDS } = await import(path.join(ROOT, 'supabase/functions/_shared/schema.js'));
+const core = await import(path.join(ROOT, 'supabase/functions/_shared/core.js'));
 const { validateBatch, propsOk, countryFrom, originAllowed, createLimiter, bannedKey, clientIp, LIMITS } = core;
-const { createEventsHandler, createDashboardHandler, secretsEqual, readCapped } = await import(path.join(ROOT, 'supabase/functions/events/handler.js'));
+const { createEventsHandler, createDashboardHandler, secretsEqual, readCapped } = await import(path.join(ROOT, 'supabase/functions/_shared/handler.js'));
 
 const A = '3b1f9c2e-7a54-4d0b-9e21-5c8d6f0a1b23';
 const S = '9d2c4e61-0f3a-4b7d-8a15-2e6b7c9d0e41';
@@ -320,28 +320,39 @@ test('limiter table: expired entries are evicted first, then the least recent; t
 });
 
 // ---------- no time of day, no sign-up to device link ----------
-test('sign_up and sign_in rows get fresh random IDs; other rows keep the device and session IDs', () => {
-  const out = validateBatch(env({ events: [
-    { event: 'app_open', props: { surface: 'home' } },
+const ONE_OFF = ['signup_start', 'sign_up', 'sign_in', 'guest_progress_moved'];
+const FULL = env({ app_version: '1.2.3', source: { utm_source: 'facebook', utm_medium: 'social', utm_campaign: 'spring', referrer_domain: 'news.example.org' } });
+
+test('account-creation events keep only event, app, page area and fresh random IDs; nothing else survives', () => {
+  const out = validateBatch({ ...FULL, events: [
+    { event: 'app_open', props: { surface: 'home', auth_state: 'guest' } },
+    { event: 'signup_start', props: { method: 'google', surface: 'login' } },
+    { event: 'sign_up', props: { auth_state: 'guest', method: 'email', surface: 'login' } },
+    { event: 'sign_in', props: { method: 'apple', surface: 'login' } },
+    { event: 'guest_progress_moved', props: { surface: 'login' } },
     { event: 'sign_up', props: { auth_state: 'guest', method: 'email' } },
-    { event: 'sign_up', props: { auth_state: 'guest', method: 'google' } },
-    { event: 'sign_in', props: { method: 'email' } },
-    { event: 'signup_start', props: { method: 'email' } },
-  ] }), 'US');
-  const byEvent = (e) => out.rows.filter((r) => r.event === e);
-  assert.equal(byEvent('app_open')[0].anon_id, A);
-  assert.equal(byEvent('signup_start')[0].anon_id, A);
-  const oneOff = [...byEvent('sign_up'), ...byEvent('sign_in')];
-  assert.equal(oneOff.length, 3);
+  ] }, 'US');
+  const normal = out.rows.find((r) => r.event === 'app_open');
+  assert.equal(normal.anon_id, A);
+  assert.equal(normal.country, 'US');
+  assert.equal(normal.utm_source, 'facebook');
+  assert.equal(normal.platform, 'web');
+  const oneOff = out.rows.filter((r) => ONE_OFF.includes(r.event));
+  assert.equal(oneOff.length, 5);
   const ids = new Set();
   for (const r of oneOff) {
-    assert.notEqual(r.anon_id, A);
-    assert.notEqual(r.session_id, S);
+    assert.deepEqual(Object.keys(r).sort(), ['anon_id', 'app', 'app_version', 'country', 'event', 'platform', 'props', 'referrer_domain', 'session_id', 'utm_campaign', 'utm_medium', 'utm_source']);
+    for (const k of ['platform', 'app_version', 'country', 'utm_source', 'utm_medium', 'utm_campaign', 'referrer_domain']) assert.strictEqual(r[k], null, `${r.event}.${k}`);
+    assert.ok(Object.keys(r.props).every((k) => k === 'surface'), `${r.event} props: ${JSON.stringify(r.props)}`);
+    assert.notEqual(r.anon_id, A); assert.notEqual(r.session_id, S);
     assert.match(r.anon_id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     ids.add(r.anon_id); ids.add(r.session_id);
   }
-  assert.equal(ids.size, 6, 'every one-off ID is unique');
-  assert.ok(!JSON.stringify(oneOff).includes(A) && !JSON.stringify(oneOff).includes(S));
+  assert.equal(ids.size, 10, 'every one-off ID is unique');
+  const text = JSON.stringify(oneOff);
+  for (const bad of [A, S, 'google', 'apple', 'email', 'auth_state', 'method', 'facebook', 'spring', 'news.example.org', '1.2.3', '"US"', 'web']) assert.ok(!text.includes(bad), `a one-off row still holds ${bad}`);
+  assert.deepEqual(oneOff[0].props, { surface: 'login' });
+  assert.deepEqual(oneOff[4].props, {}, 'no surface sent, none stored');
   for (const r of out.rows) assert.deepEqual(Object.keys(r).filter((k) => /time|ts$|created|at$/.test(k)), [], 'no timestamp field in a row');
 });
 
@@ -383,7 +394,7 @@ test('analytics-dashboard function: constant-time secret, GET only, fails closed
 });
 
 test('function sources: RPC only, no direct table writes, never x-forwarded-for, never logs an IP', () => {
-  const src = ['supabase/functions/events/handler.js', 'supabase/functions/events/core.js', 'supabase/functions/events/index.ts', 'supabase/functions/analytics-dashboard/index.ts'].map(read).join('\n');
+  const src = ['supabase/functions/_shared/handler.js', 'supabase/functions/_shared/core.js', 'supabase/functions/events/index.ts', 'supabase/functions/analytics-dashboard/index.ts'].map(read).join('\n');
   assert.ok(src.includes('/rest/v1/rpc/analytics_ingest') && src.includes('/rest/v1/rpc/analytics_dashboard'));
   assert.ok(!/rest\/v1\/(?!rpc)/.test(src), 'no direct table REST writes');
   assert.ok(!/x-forwarded-for/i.test(src.replace(/\/\/.*$/gm, '')), 'x-forwarded-for is only mentioned in comments');
@@ -412,10 +423,14 @@ test('migration: raw events store a day only: no timestamp column, no sequence o
   assert.ok(/^\s+id\s+uuid primary key default gen_random_uuid\(\)/m.test(eventsBody), 'random row id, so insertion order is not kept');
   assert.ok(!/generated always as identity|serial/i.test(eventsBody));
   const ingest = SQL.slice(SQL.indexOf('create or replace function public.analytics_ingest'), SQL.indexOf('revoke all on function public.analytics_ingest'));
-  assert.ok(/when r\.event in \('sign_up', 'sign_in'\) then gen_random_uuid\(\) else r\.anon_id/.test(ingest), 'the database also replaces the device ID on sign_up/sign_in');
-  assert.ok(/when r\.event in \('sign_up', 'sign_in'\) then gen_random_uuid\(\) else r\.session_id/.test(ingest));
+  const oo = "r.event in ('sign_up', 'sign_in', 'signup_start', 'guest_progress_moved')";
+  assert.ok(ingest.includes(`when ${oo} then gen_random_uuid() else r.anon_id`), 'the database also replaces the device ID on all four events');
+  assert.ok(ingest.includes(`when ${oo} then gen_random_uuid() else r.session_id`));
+  for (const col of ['platform', 'app_version', 'country', 'utm_source', 'utm_medium', 'utm_campaign', 'referrer_domain']) assert.ok(ingest.includes(`when ${oo} then null else r.${col}`), `${col} is nulled in the database`);
+  assert.ok(ingest.includes("jsonb_build_object('surface', r.props -> 'surface')"), 'only the page area survives in props');
   const agg = SQL.slice(SQL.indexOf('analytics.aggregate_day(p_day date)'), SQL.indexOf('analytics.purge_raw()'));
-  assert.ok(/event not in \('sign_up', 'sign_in'\) group by app, anon_id/.test(agg), 'users are counted without the one-off rows');
+  assert.ok(/event not in \('sign_up', 'sign_in', 'signup_start', 'guest_progress_moved'\) group by app, anon_id/.test(agg), 'users are counted without the one-off rows');
+  assert.ok(/^\s+platform\s+text check \(platform is null or/m.test(eventsBody), 'platform may be null');
   assert.ok(!/created_at/.test(SQL.replace(/--.*$/gm, '')));
 });
 
@@ -445,9 +460,9 @@ test('migration: every function pins search_path; bounds; 14-month retention; no
 const PRIVACY_HEADING = 'Guest ID and usage counts';
 const PRIVACY_OFF_LINE = 'Usage counts are currently off.';
 const PRIVACY_PARAGRAPHS = [
-  `When usage counts are on, our server records simple events on bobolearns.com, such as opening a page, starting sign-up or signing in, so we can see what is useful. Most events have a random ID for this browser; sign-up and sign-in events get a separate one-off ID instead, so they can't be linked to you. Each event also has the date, the page area, whether you were signed in, where the visit came from (for example a search engine or a link we posted) and your country.`,
+  `When usage counts are on, our server records simple events on bobolearns.com, such as opening a page, starting sign-up or signing in, so we can see what is useful. Most events have a random ID for this browser, the date, the page area, whether you were signed in, where the visit came from (for example a search engine or a link we posted) and your country. Sign-up, sign-in and progress-moving events instead get a separate one-off ID and keep only the date and page area, so they can't be linked to you.`,
   `The random ID, and a made-up name made from it (for example "Guest Brave-Otter-4821"), are kept in this browser's local storage. They are not made from your IP address and mean nothing outside our tools.`,
-  `We use your IP address only to work out your country. We don't store it in our analytics or guest IDs. Our hosting and database providers keep standard security logs, described above.`,
+  `We use your IP address only to work out your country and, briefly, to stop abuse. We don't store it in our analytics or guest IDs. Our hosting and database providers keep standard security logs, described above.`,
   `Your guest ID isn't linked to your account.`,
   `Event records, including the random ID, are kept for 14 months. Daily totals that contain no IDs may be kept longer.`,
   `You can turn usage counts off on this device or reset your guest ID with the controls below, or clear this site's data in your browser. If your browser sends Do Not Track or Global Privacy Control, we don't count your visits.`,
@@ -494,7 +509,7 @@ test('the page stays true in both states: while off it says so; if a later PR tu
 
 test('README lists the exact static edits and the preconditions for enabling', () => {
   const r = read('supabase/analytics/README.md');
-  for (const needle of ['Usage counts are currently off.', 'We do not use advertising, analytics or cross-site tracking cookies.', 'We do not use advertising or cross-site tracking cookies.', 'aggregate_day', 'purge_raw', 'precondition', 'cf-connecting-ip', 'unverified', 'ANALYTICS_DASHBOARD_SECRET']) assert.ok(r.includes(needle), needle);
+  for (const needle of ['not recorded by method, source or country', '"<5"', 'Usage counts are currently off.', 'We do not use advertising, analytics or cross-site tracking cookies.', 'We do not use advertising or cross-site tracking cookies.', 'aggregate_day', 'purge_raw', 'precondition', 'cf-connecting-ip', 'unverified', 'ANALYTICS_DASHBOARD_SECRET']) assert.ok(r.includes(needle), needle);
 });
 
 test('privacy controls work with the flag off: guest name, off switch and reset', () => {
@@ -520,7 +535,7 @@ test('no Google, Meta or other third-party tag or SDK anywhere in the site', () 
 
 test('public repo hygiene: no internal codes, Drive links, private emails or internal names in the new files or this test', () => {
   const names = new RegExp([['Ni', 'zam'], ['Flor', 'ence'], ['Al-', 'Jazari'], ['Mis', 'ha\\b'], ['Bab', "ar's"], ['Zir', 'yab'], ['Ibn ', 'Sina']].map((p) => p.join('')).join('|'));
-  const files = ['assets/js/bb-analytics.js', 'supabase/functions/events/index.ts', 'supabase/functions/events/core.js', 'supabase/functions/events/handler.js', 'supabase/functions/events/schema.js', 'supabase/functions/analytics-dashboard/index.ts', 'supabase/migrations/20261111000000_analytics_events.sql', 'supabase/analytics/README.md', 'privacy/index.html', '.github/tests/analytics.test.mjs'];
+  const files = ['assets/js/bb-analytics.js', 'supabase/functions/events/index.ts', 'supabase/functions/_shared/core.js', 'supabase/functions/_shared/handler.js', 'supabase/functions/_shared/schema.js', 'supabase/functions/analytics-dashboard/index.ts', 'supabase/migrations/20261111000000_analytics_events.sql', 'supabase/analytics/README.md', 'privacy/index.html', '.github/tests/analytics.test.mjs'];
   for (const f of files) {
     const s = read(f);
     assert.ok(!/\b(BD|D|S|A)-[A-Z]*-?\d{2,4}\b/.test(s), `${f}: internal code`);
@@ -528,4 +543,53 @@ test('public repo hygiene: no internal codes, Drive links, private emails or int
     assert.ok(!/@gmail\.com/.test(s.replace(/machinemisha@gmail\.com/g, '')), `${f}: email`);
     assert.ok(!names.test(s.replace(/A project by[^<]*/g, '')), `${f}: internal name`);
   }
+});
+
+// ---------- the migration, run in a real Postgres engine (PGlite) ----------
+// PGlite is not a dependency of this repo. Run locally with PGLITE_DIR=<a folder with @electric-sql/pglite installed>;
+// without it the test is skipped (CI does not have it).
+test('migration in PGlite: one-off rows are stripped, users exclude them, small cells are hidden', { skip: !process.env.PGLITE_DIR && 'set PGLITE_DIR to run' }, async () => {
+  const { PGlite } = await import(path.join(process.env.PGLITE_DIR, 'node_modules/@electric-sql/pglite/dist/index.js'));
+  const db = new PGlite();
+  await db.exec('create role anon; create role authenticated; create role service_role;');
+  await db.exec(SQL);
+  const U = Array.from({ length: 12 }, (_, i) => `${String(i + 1).padStart(8, '0')}-1111-4111-8111-111111111111`);
+  const SS = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const mk = (anon, event, props = {}, extra = {}) => ({ app: 'hub', event, anon_id: anon, session_id: SS, platform: 'web', app_version: '1.0', country: 'US', utm_source: 'facebook', utm_medium: 'social', utm_campaign: 'c', referrer_domain: 'x.com', props, ...extra });
+  const rows = [];
+  for (let i = 0; i < 12; i++) rows.push(mk(U[i], 'app_open', { surface: 'home', auth_state: 'guest' }, i < 8 ? {} : { utm_source: null, referrer_domain: null }));
+  for (let i = 0; i < 12; i++) rows.push(mk(U[i], 'site_open', { slug: 'chess' }));
+  for (let i = 0; i < 3; i++) rows.push(mk(U[i], 'signup_start', { method: 'google', surface: 'login' }));
+  rows.push(mk(U[0], 'sign_up', { auth_state: 'guest', method: 'email', surface: 'login' }), mk(U[1], 'sign_up', { auth_state: 'guest', method: 'google', surface: 'login' }));
+  rows.push(mk(U[2], 'sign_in', { method: 'email', surface: 'login' }), mk(U[3], 'guest_progress_moved', { surface: 'login' }));
+  rows.push(mk(U[11], 'app_open', { surface: 'home' }, { utm_source: 'tiny', referrer_domain: null })); // a source with 1 visit
+  await db.query('select public.analytics_ingest($1::jsonb)', [JSON.stringify(rows)]);
+
+  const one = (await db.query(`select * from analytics.events where event in ('sign_up','sign_in','signup_start','guest_progress_moved')`)).rows;
+  assert.equal(one.length, 7);
+  for (const r of one) {
+    for (const c of ['platform', 'app_version', 'country', 'utm_source', 'utm_medium', 'utm_campaign', 'referrer_domain']) assert.strictEqual(r[c], null, `${r.event}.${c}`);
+    assert.ok(!U.includes(r.anon_id) && r.session_id !== SS);
+    assert.ok(Object.keys(r.props).every((k) => k === 'surface'), JSON.stringify(r.props));
+  }
+  assert.equal(new Set(one.flatMap((r) => [r.anon_id, r.session_id])).size, 14);
+  const keep = (await db.query(`select * from analytics.events where event = 'app_open' limit 1`)).rows[0];
+  assert.equal(keep.country, 'US');
+
+  await db.exec('select analytics.aggregate_day(current_date)');
+  const stats = (await db.query('select * from analytics.daily_app_stats')).rows[0];
+  assert.equal(stats.dau, 12, 'users are counted without the one-off rows');
+  assert.equal(stats.signups_1d, 2);
+  assert.equal(stats.funnel_signup_start, 3, 'signup_start counted as events');
+
+  const d = (await db.query('select public.analytics_dashboard() d')).rows[0].d;
+  const app = d.apps[0];
+  assert.equal(app.dau, 12); assert.equal(app.wau, 12); assert.equal(app.mau, 12);
+  assert.equal(app.signups_1d, '<5'); assert.equal(app.funnel_signup_start, '<5'); assert.equal(app.funnel_sign_up, '<5'); assert.equal(app.signins_1d, '<5');
+  assert.equal(app.funnel_app_open, 12); assert.equal(app.funnel_guest, 0, 'zero is shown as zero');
+  assert.deepEqual(app.top_events, [{ event: 'site_open', n: 12 }]);
+  const src = Object.fromEntries(d.sources.map((s) => [s.source, s.visits]));
+  assert.equal(src.facebook, 8);
+  assert.ok(!('tiny' in src) && !('direct' in src), 'sources under 5 are folded, not listed');
+  assert.equal(src.other, 5, 'direct (4) and tiny (1) fold into other');
 });

@@ -5,6 +5,6 @@
 // Deploy WITHOUT JWT verification: supabase functions deploy analytics-dashboard --no-verify-jwt   (an operator step; not done here)
 // Secrets: ANALYTICS_DASHBOARD_SECRET (random, at least 24 characters; the same value goes in the proxy), plus the
 // SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY that Supabase provides.
-import { createDashboardHandler } from '../events/handler.js';
+import { createDashboardHandler } from '../_shared/handler.js';
 
 Deno.serve(createDashboardHandler({ env: (k: string) => Deno.env.get(k) }));
