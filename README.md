@@ -11,6 +11,7 @@ Live at https://bobolearns.com. Static site (HTML/CSS/JS, no build step) that li
 | `sites.json` | **Registry of all sites. Add one entry to add a site.** |
 | `assets/js/bobo-auth.js` | Shared auth client (cookie session on `.bobolearns.com`) |
 | `supabase/hub.sql` | Optional `site_events` table (not applied yet) |
+| `assets/js/bb-analytics.js` | First-party usage counts (guest events). OFF by default; see `supabase/analytics/README.md` |
 
 ## Deploy (Hostinger + GitHub)
 1. hPanel → **Websites → bobolearns.com → Git** → create a repository: `https://github.com/mishamachine/bobolearns-hub`, branch `main`, directory `public_html`.
@@ -37,7 +38,7 @@ Add an object to `sites.json` (`slug`, `name`, `url`, `status`, `tagline`, `stat
 - Have the Privacy Policy and Terms reviewed.
 
 ## Cache busting
-Assets are cached for up to an hour (see `.htaccess`). Their links carry `?v=N` (currently 4). When you change any CSS or JS, bump `N` in the HTML files so visitors get the new version right away.
+Assets are cached for up to an hour (see `.htaccess`). Their links carry `?v=N` (currently 5). When you change any CSS or JS, bump `N` in the HTML files so visitors get the new version right away.
 
 ## Naming
 The product name is **Bobo Learns** followed by the subject (Bobo Learns Lingo, Bobo Learns Chess). The mascot is **Mister Bobo** ("Bobo" for short). The Bobo artwork is generated in the lingo repo (`src/lib/boboArt.ts`, `npm run export:bobo`); `assets/img/bobo/` and `assets/img/favicon.svg` are copies of its output.

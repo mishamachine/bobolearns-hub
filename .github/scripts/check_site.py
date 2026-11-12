@@ -14,6 +14,8 @@ Run from the repo root: python3 .github/scripts/check_site.py
 import json
 import pathlib
 import re
+import shutil
+import subprocess
 import sys
 import xml.etree.ElementTree as ET
 from urllib.parse import urlsplit
@@ -136,11 +138,23 @@ def check_contact():
             errors.append(f"{f.relative_to(ROOT)}: contains the retired contact address; use machinemisha@gmail.com")
 
 
+def check_analytics_tests():
+    """Runs the analytics tests (node:test). CI already installs Node, so this needs no workflow change."""
+    node = shutil.which("node")
+    if node is None:
+        errors.append("analytics tests: node is not installed")
+        return
+    r = subprocess.run([node, "--test", ".github/tests/analytics.test.mjs"], cwd=ROOT, capture_output=True, text=True)
+    if r.returncode != 0:
+        errors.append("analytics tests failed:\n" + (r.stdout + r.stderr)[-3000:])
+
+
 def main():
     check_html()
     check_sites_json()
     check_sitemap()
     check_contact()
+    check_analytics_tests()
     if errors:
         print(f"{len(errors)} problem(s) found:")
         for e in errors:

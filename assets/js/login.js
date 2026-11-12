@@ -34,6 +34,9 @@
     msg("");
   }
 
+  // Usage counts (off unless enabled in config.js). Codes only: never the email, never an account ID.
+  function count(event, props) { if (window.bbAnalytics) { window.bbAnalytics.track(event, props); } }
+
   function busy(on) {
     document.querySelectorAll("#authPanel button").forEach(function (b) { b.disabled = on; });
   }
@@ -57,11 +60,13 @@
     if (mode === "signup" && password.length < 8) { return msg("Use at least 8 characters for your password.", "err"); }
     busy(true);
     msg("");
+    if (mode === "signup") { count("signup_start", { method: "email", surface: "login" }); }
     var req = mode === "signin"
       ? sb.auth.signInWithPassword({ email: email, password: password })
       : sb.auth.signUp({ email: email, password: password, options: { emailRedirectTo: dest } });
     req.then(function (res) {
       if (res.error) { throw res.error; }
+      count(mode === "signin" ? "sign_in" : "sign_up", mode === "signin" ? { method: "email", surface: "login" } : { auth_state: "guest", method: "email", surface: "login" });
       if (res.data && res.data.session) { location.assign(dest); return; }
       busy(false);
       msg("Almost there. We sent a confirmation link to " + email + ". Open it to finish signing up.", "ok");
@@ -72,6 +77,7 @@
     b.addEventListener("click", function () {
       busy(true);
       msg("");
+      if (mode === "signup") { count("signup_start", { method: b.getAttribute("data-provider") === "apple" ? "apple" : "google", surface: "login" }); }
       sb.auth.signInWithOAuth({ provider: b.getAttribute("data-provider"), options: { redirectTo: dest } })
         .then(function (res) { if (res.error) { throw res.error; } })
         .catch(function (err) { busy(false); msg(friendly(err), "err"); });
