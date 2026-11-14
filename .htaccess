@@ -18,6 +18,13 @@ RedirectMatch 404 ^/(\.git|supabase|README\.md|\.gitignore)
   Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
 </IfModule>
 
+AddType application/manifest+json .webmanifest
+
+# The service worker must always be re-checked by the browser
+<Files "sw.js">
+  Header set Cache-Control "no-cache"
+</Files>
+
 <IfModule mod_expires.c>
   ExpiresActive On
   ExpiresByType image/svg+xml "access plus 1 month"

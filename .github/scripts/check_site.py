@@ -136,7 +136,45 @@ def check_contact():
             errors.append(f"{f.relative_to(ROOT)}: contains the retired contact address; use machinemisha@gmail.com")
 
 
+def check_install():
+    """Pin the Add to Home Screen contract (Hub spec v0.4): copy, limits, safety of the service worker."""
+    js = (ROOT / "assets/js/install.js").read_text(encoding="utf-8")
+    sw = (ROOT / "sw.js").read_text(encoding="utf-8")
+    pins = [
+        'title: "Add Bobo Learns to your home screen"',
+        'benefit: "Opens like an app, without the browser bars."',
+        'iosHowTo: "Tap Share, then Add to Home Screen."',
+        'add: "Add"', 'gotIt: "Got it"', 'notNow: "Not now"',
+        'footerLink: "Add to home screen"',
+        "SHEET_GAP_MS = 14 * 24 * 60 * 60 * 1000", "MAX_DISMISSALS = 2",
+    ]
+    for pin in pins:
+        if pin not in js:
+            errors.append(f"assets/js/install.js: pinned line missing: {pin}")
+    for banned in ("gtag", "dataLayer", "fetch(", "XMLHttpRequest", "sendBeacon"):
+        if banned in js:
+            errors.append(f"assets/js/install.js: must not contain {banned} (no events, no network)")
+    if "offline" in js.lower():
+        errors.append("assets/js/install.js: no offline claim in the copy")
+    if '"/login' not in sw or '"/dashboard' not in sw:
+        errors.append("sw.js: must bypass /login and /dashboard")
+    for banned in ("supabase", "bobo-auth", "config.js", "login.js", "dashboard.js"):
+        if banned in sw.lower():
+            errors.append(f"sw.js: must not reference {banned}")
+    try:
+        m = json.loads((ROOT / "manifest.webmanifest").read_text(encoding="utf-8"))
+        for k, v in (("name", "Bobo Learns"), ("start_url", "/"), ("display", "standalone")):
+            if m.get(k) != v:
+                errors.append(f"manifest.webmanifest: {k} must be {v!r}")
+        for icon in m.get("icons", []):
+            if not resolve(icon["src"]):
+                errors.append(f"manifest.webmanifest: icon {icon['src']} missing")
+    except (OSError, ValueError) as e:
+        errors.append(f"manifest.webmanifest: does not parse ({e})")
+
+
 def main():
+    check_install()
     check_html()
     check_sites_json()
     check_sitemap()
