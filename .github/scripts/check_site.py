@@ -141,8 +141,9 @@ def check_contact():
 GUEST_PROGRESS_SENTENCE = (
     "In Woof, if you don't sign in, your lesson progress and study time are saved in your browser "
     "on this device only. They aren't sent to us, and clearing this site's data erases them. "
-    "Sign in to keep your progress across devices. If you sign in later, we'll offer to add it "
-    "to your account."
+    "Sign in to keep your progress across devices. If you sign in later, your progress moves "
+    "into your account: automatically when you sign in from Woof, and after we ask if you sign "
+    "in elsewhere."
 )
 OLD_PROGRESS_SENTENCE = "lesson progress and study time are saved only when you're signed in"
 
