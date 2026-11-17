@@ -8,6 +8,8 @@
 4. sitemap.xml parses and each of its URLs on this domain maps to a page in the repo.
 
 5. The retired contact address must not appear in public pages or in assets/js/config.js.
+6. The privacy page keeps its exact sentence on Woof guest progress (kept in the browser, not sent
+   to us), and the older "saved only when you're signed in" sentence must not come back.
 
 Run from the repo root: python3 .github/scripts/check_site.py
 """
@@ -136,11 +138,31 @@ def check_contact():
             errors.append(f"{f.relative_to(ROOT)}: contains the retired contact address; use machinemisha@gmail.com")
 
 
+GUEST_PROGRESS_SENTENCE = (
+    "In Woof, if you don't sign in, your lesson progress and study time are saved in your browser "
+    "on this device only. They aren't sent to us, and clearing your browser's data for woof.bobolearns.com erases them. "
+    "Sign in to keep your progress across devices. If you sign in later, your progress moves "
+    "into your account: automatically when you sign in from Woof, and after we ask if you sign "
+    "in elsewhere."
+)
+OLD_PROGRESS_SENTENCE = "lesson progress and study time are saved only when you're signed in"
+
+
+def check_privacy_copy():
+    page = ROOT / "privacy" / "index.html"
+    text = page.read_text(encoding="utf-8")
+    if GUEST_PROGRESS_SENTENCE not in text:
+        errors.append("privacy/index.html: the Woof guest-progress sentence is missing or has changed")
+    if OLD_PROGRESS_SENTENCE in text:
+        errors.append("privacy/index.html: the old 'saved only when you're signed in' sentence is back")
+
+
 def main():
     check_html()
     check_sites_json()
     check_sitemap()
     check_contact()
+    check_privacy_copy()
     if errors:
         print(f"{len(errors)} problem(s) found:")
         for e in errors:
