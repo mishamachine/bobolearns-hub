@@ -61,14 +61,14 @@ test('flag on: app_open fires once with a random v4 UUID, stable per device', as
   assert.deepEqual(p.events, [{ event: 'app_open', props: { surface: 'home', auth_state: 'guest' } }]);
 });
 
-test('the payload never carries a user ID, email or any account link; guest vs member is a flag only', async () => {
+test('the payload never carries a user ID, email or any account link; a signed-in browser sends no guest events', async () => {
   const guest = (await loadClient({}).payloads())[0];
-  const member = (await loadClient({ cookie: 'sb-ywcrzkvwamjchjjkfrve-auth-token.0=SECRETVALUE' }).payloads())[0];
+  const member = loadClient({ cookie: 'sb-ywcrzkvwamjchjjkfrve-auth-token.0=SECRETVALUE' }); // no-join rule (c): see no-join.test.mjs T5
   assert.equal(guest.events[0].props.auth_state, 'guest');
-  assert.equal(member.events[0].props.auth_state, 'member');
-  const text = JSON.stringify([guest, member]);
+  assert.equal(member.sent.length, 0, 'signed-in app_open is not sent under a guest ID');
+  const text = JSON.stringify(guest);
   for (const bad of ['user_id', 'userId', 'email', 'SECRETVALUE', 'account_linked', 'identify']) assert.ok(!text.includes(bad), bad);
-  assert.deepEqual(Object.keys(member).sort(), ['anon_id', 'app', 'events', 'platform', 'session_id', 'source']);
+  assert.deepEqual(Object.keys(guest).sort(), ['anon_id', 'app', 'events', 'platform', 'session_id', 'source']);
 });
 
 test('Do Not Track and the off switch stop everything; reset makes a new ID', async () => {

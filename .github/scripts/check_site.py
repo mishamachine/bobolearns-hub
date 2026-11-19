@@ -144,9 +144,10 @@ def check_analytics_tests():
     if node is None:
         errors.append("analytics tests: node is not installed")
         return
-    r = subprocess.run([node, "--test", ".github/tests/analytics.test.mjs"], cwd=ROOT, capture_output=True, text=True)
-    if r.returncode != 0:
-        errors.append("analytics tests failed:\n" + (r.stdout + r.stderr)[-3000:])
+    for name in ("analytics", "no-join"):
+        r = subprocess.run([node, "--test", f".github/tests/{name}.test.mjs"], cwd=ROOT, capture_output=True, text=True)
+        if r.returncode != 0:
+            errors.append(f"{name} tests failed:\n" + (r.stdout + r.stderr)[-3000:])
 
 
 def main():

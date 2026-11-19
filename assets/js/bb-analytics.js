@@ -29,6 +29,7 @@
     }
   };
 
+  var ONE_OFF = ["signup_start", "sign_up", "sign_in", "guest_progress_moved"]; // same four as the server's one-off rows
   var KEY_ID = "bb.anon.v1";
   var KEY_OFF = "bb.analytics.off";
   var KEY_SESSION = "bb.session.v1";
@@ -152,9 +153,15 @@
     if (!active() || !cfg.endpoint || SCHEMA.apps.indexOf(cfg.app) === -1) { return false; }
     var clean = cleanProps(event, props);
     if (!clean) { return false; }
+    // No-join rule (c): the guest ID is never sent with account-creation events, and once a sign-in session exists the old guest
+    // ID is deleted and nothing more is sent under it. Account-creation events get a throwaway random ID (never stored); the server
+    // replaces it again. Other events from a signed-in browser are not sent at all.
+    var oneOff = ONE_OFF.indexOf(event) !== -1;
+    var member = authState() === "member";
+    if (member) { reset(); if (!oneOff) { return false; } }
     send({
-      app: cfg.app, anon_id: anonId(true), session_id: sessionId(), platform: "web", app_version: cfg.version || undefined,
-      source: source(), events: [{ event: event, props: clean }]
+      app: cfg.app, anon_id: oneOff ? uuid4() : anonId(true), session_id: oneOff ? uuid4() : sessionId(), platform: "web",
+      app_version: cfg.version || undefined, source: oneOff ? {} : source(), events: [{ event: event, props: clean }]
     });
     return true;
   }
