@@ -14,9 +14,9 @@ d. App users (anon and authenticated roles) cannot read guest event tables. Read
 
 e. Any PR touching guest tables, the event client or reporting views needs a CTO Reviewer check against this rule and a one-line CBO note. A breach is a High escalation to Nizam and Misha the same day: reverse it or pull the privacy line, whichever is faster.
 
-## Known gap against (a), recorded so the test is honest
+## Columns beyond (a): accepted by CBO 19 Nov
 
-The shipped `analytics.events` table also holds a random row id, a random session id, platform, app version, country, utm source/medium/campaign and referrer domain. These are coarse context fields, not account links, but they are more than (a) lists. Test T1 pins them in an explicit "pending CBO sign-off" list: a new column fails the test, and removing one tightens it. Either the CBO accepts them (then edit (a) and that list in the same PR) or they are dropped.
+The shipped `analytics.events` table also holds a random row id, a random session id, platform, app version, country (country only; the IP is never stored), utm source/medium/campaign (lowercase codes) and referrer domain (domain only, never path or query). These are coarse context fields, not account links. Accepted by CBO 19 Nov. `utm_term` and `utm_content` are dropped: they are not collected, sent, stored or allowed. Test T1 pins the accepted list: a new column fails the test, and removing one tightens it.
 
 ## What the tests check
 

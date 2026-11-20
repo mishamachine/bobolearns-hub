@@ -102,6 +102,16 @@ test('client cleanProps: allow-list only, no free text, sign_up must be guest', 
   assert.equal(api.cleanProps('not_an_event', {}), null);
 });
 
+test('source: utm_term and utm_content are never sent, accepted or stored (CBO ruling 19 Nov)', async () => {
+  const c = loadClient({ search: '?utm_source=a&utm_medium=b&utm_campaign=c&utm_term=kw&utm_content=ad1' });
+  const [p] = await c.payloads();
+  assert.deepEqual(Object.keys(p.source).sort(), ['utm_campaign', 'utm_medium', 'utm_source']);
+  assert.ok(!JSON.stringify(p).includes('utm_term') && !JSON.stringify(p).includes('utm_content') && !JSON.stringify(p).includes('kw'));
+  const out = validateBatch(env({ source: { utm_source: 'a', utm_term: 'kw', utm_content: 'ad1' } }), null);
+  for (const r of out.rows) assert.ok(!('utm_term' in r) && !('utm_content' in r));
+  for (const f of ['assets/js/bb-analytics.js', 'supabase/functions/_shared/core.js', 'supabase/migrations/20261111000000_analytics_events.sql']) assert.ok(!/utm_term|utm_content/.test(read(f)), f);
+});
+
 test('source: lowercase utm codes and the referrer domain only; own domain is not a referrer', async () => {
   const c = loadClient({ search: '?utm_source=Facebook&utm_medium=social&utm_campaign=Bad%20Value&email=a@b.c', referrer: 'https://news.example.org/a/b?q=secret' });
   const [p] = await c.payloads();

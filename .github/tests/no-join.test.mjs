@@ -35,15 +35,15 @@ const events = tables.find((t) => t.name === 'events');
 // ---------- T1 column allowlist (rule a) ----------
 const RULE_A = ['anon_id', 'event', 'day', 'app', 'props']; // guest ID, event name, date, app name; props carries the content/screen identifier only
 const ROW_ID = ['id']; // random uuid, not a sequence
-// Fields beyond rule (a), shipped in this PR. Pending CBO sign-off: see "Known gap" in docs/privacy/no-join-rule.md.
-const PENDING_CBO = ['session_id', 'platform', 'app_version', 'country', 'utm_source', 'utm_medium', 'utm_campaign', 'referrer_domain'];
+// Fields beyond rule (a): accepted by CBO 19 Nov. utm_term and utm_content are dropped and must never be added.
+const CBO_ACCEPTED = ['session_id', 'platform', 'app_version', 'country', 'utm_source', 'utm_medium', 'utm_campaign', 'referrer_domain'];
 const FORBIDDEN_WORDS = ['user', 'email', 'ip', 'account', 'push', 'token', 'fingerprint', 'device', 'hash', 'phone', 'name', 'member', 'profile', 'lat', 'lng'];
 const FORBIDDEN = { test: (c) => c.split('_').some((w) => FORBIDDEN_WORDS.includes(w)) };
 const PROP_ALLOWED = ['surface', 'auth_state', 'method', 'slug'];
 
-test('T1 column allowlist: guest event table has exactly the rule-(a) columns plus the listed pending ones', () => {
+test('T1 column allowlist: guest event table has exactly the rule-(a) columns plus the CBO-accepted ones', () => {
   assert.ok(events && events.cols.length > 5, 'parsed analytics.events');
-  assert.deepEqual([...events.cols].sort(), [...RULE_A.filter((c) => c !== 'props'), 'props', ...ROW_ID, ...PENDING_CBO].sort(), 'a new or removed column must be a deliberate edit of this list and of rule (a)');
+  assert.deepEqual([...events.cols].sort(), [...RULE_A.filter((c) => c !== 'props'), 'props', ...ROW_ID, ...CBO_ACCEPTED].sort(), 'a new or removed column must be a deliberate edit of this list and of rule (a)');
   for (const c of events.cols) {
     if (c === 'anon_id') continue; // the guest ID itself
     assert.ok(!FORBIDDEN.test(c), `forbidden-looking column ${c}`);
