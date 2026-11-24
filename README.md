@@ -19,12 +19,12 @@ Live at https://bobolearns.com. Static site (HTML/CSS/JS, no build step) that li
 
 ## Supabase setup (project `ywcrzkvwamjchjjkfrve`)
 1. **Authentication → URL Configuration:** Site URL `https://bobolearns.com`; add redirect URLs `https://bobolearns.com/**`, `https://lingo.bobolearns.com/**`, `https://chess.bobolearns.com/**`.
-2. **Providers → Google:** already configured for Lingo; no change needed for the hub.
+2. **Providers → Google:** already configured for Woof; no change needed for the hub.
 3. **Providers → Apple:** needs a paid Apple Developer account (Services ID, key, team ID). The button is live but returns an error until configured.
 4. Optional: run `supabase/hub.sql` so Chess (and future sites) can log activity.
 
 ## Single sign-on across sites
-Lingo and Chess already store their Supabase session in a cookie on `.bobolearns.com` (`src/lib/cookieStorage.ts`). The hub's `assets/js/bobo-auth.js` uses the identical cookie format and the default Supabase storage key, so one login works on all three. **Keep these in sync:** if you change the cookie logic in one place, change it everywhere.
+Woof and Chess already store their Supabase session in a cookie on `.bobolearns.com` (`src/lib/cookieStorage.ts`). The hub's `assets/js/bobo-auth.js` uses the identical cookie format and the default Supabase storage key, so one login works on all three. **Keep these in sync:** if you change the cookie logic in one place, change it everywhere.
 
 To send a signed-out user from another site to the hub's login: `https://bobolearns.com/login/?next=<their site URL>`. Only `*.bobolearns.com` destinations are honored.
 
@@ -40,4 +40,4 @@ Add an object to `sites.json` (`slug`, `name`, `url`, `status`, `tagline`, `stat
 Assets are cached for up to an hour (see `.htaccess`). Their links carry `?v=N` (currently 4). When you change any CSS or JS, bump `N` in the HTML files so visitors get the new version right away.
 
 ## Naming
-The product name is **Bobo Learns** followed by the subject (Bobo Learns Lingo, Bobo Learns Chess). The mascot is **Mister Bobo** ("Bobo" for short). The Bobo artwork is generated in the lingo repo (`src/lib/boboArt.ts`, `npm run export:bobo`); `assets/img/bobo/` and `assets/img/favicon.svg` are copies of its output.
+Apps are named **Bobo Learns** followed by the subject (Woof is the exception; the others are Bobo Learns Chess and so on). The mascot is **Mister Bobo** ("Bobo" for short). The Bobo artwork is generated in the woofabulary repo (`src/lib/boboArt.ts`, `npm run export:bobo`); `assets/img/bobo/` and `assets/img/favicon.svg` are copies of its output.
