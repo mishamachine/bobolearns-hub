@@ -1,7 +1,7 @@
 /*
  * bobo-auth.js — shared Bobo Learns login client.
  *
- * The hub's login client. It reads and writes the SAME shared session cookie as Lingo and Chess
+ * The hub's login client. It reads and writes the SAME shared session cookie as Woof and Chess
  * (cookie scoped to .bobolearns.com, default Supabase storage key), so signing in on any Bobo Learns
  * site signs you in on all of them. Static sites can reuse this file; React apps already have the
  * equivalent in src/lib/cookieStorage.ts.
@@ -14,7 +14,7 @@
   var cfg = window.BOBO_CONFIG;
   var CHUNK = 3000; // encoded characters per cookie; browsers cap a cookie near 4 KB
   var MAX_AGE = 60 * 60 * 24 * 365;
-  // Same rule as Lingo/Chess: shared cookies on *.bobolearns.com, localStorage anywhere else.
+  // Same rule as Woof/Chess: shared cookies on *.bobolearns.com, localStorage anywhere else.
   var useCookies = /(^|\.)bobolearns\.com$/.test(location.hostname);
 
   function readCookies() {
@@ -38,7 +38,7 @@
   }
 
   // IMPORTANT: this adapter and the default Supabase storage key must stay byte-for-byte compatible
-  // with src/lib/cookieStorage.ts in the Lingo and Chess repos, or sessions will not be shared.
+  // with src/lib/cookieStorage.ts in the Woof and Chess repos, or sessions will not be shared.
   var sessionStorageAdapter = {
     getItem: function (key) {
       if (!useCookies) { return window.localStorage.getItem(key); }
@@ -66,7 +66,7 @@
     }
   };
 
-  // Same options as Lingo: custom storage only (default storage key and default auth flow).
+  // Same options as Woof: custom storage only (default storage key and default auth flow).
   var client = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey, {
     auth: { storage: sessionStorageAdapter }
   });
