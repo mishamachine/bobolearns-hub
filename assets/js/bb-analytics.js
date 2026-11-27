@@ -18,11 +18,11 @@
     platforms: ["web", "ios", "android"],
     surface: { re: "^[a-z][a-z0-9_-]{0,31}$" },
     events: {
-      app_open: { props: { surface: { re: "^[a-z][a-z0-9_-]{0,31}$" }, auth_state: { enum: ["guest", "member"] } } },
+      app_open: { props: { surface: { re: "^[a-z][a-z0-9_-]{0,31}$" } } },
       guest_continue: { props: { surface: { re: "^[a-z][a-z0-9_-]{0,31}$" } } },
       guest_popup_seen: { props: { surface: { re: "^[a-z][a-z0-9_-]{0,31}$" } } },
       signup_start: { props: { method: { enum: ["email", "google", "apple"] }, surface: { re: "^[a-z][a-z0-9_-]{0,31}$" } } },
-      sign_up: { props: { auth_state: { enum: ["guest"] }, method: { enum: ["email", "google", "apple"] }, surface: { re: "^[a-z][a-z0-9_-]{0,31}$" } }, required: { auth_state: "guest" } },
+      sign_up: { props: { method: { enum: ["email", "google", "apple"] }, surface: { re: "^[a-z][a-z0-9_-]{0,31}$" } } },
       sign_in: { props: { method: { enum: ["email", "google", "apple"] }, surface: { re: "^[a-z][a-z0-9_-]{0,31}$" } } },
       guest_progress_moved: { props: { surface: { re: "^[a-z][a-z0-9_-]{0,31}$" } } },
       site_open: { props: { slug: { re: "^[a-z0-9-]{1,32}$" } }, apps: ["hub"] }
@@ -212,6 +212,6 @@
     if (a) { track("site_open", { slug: a.getAttribute("data-track-site") }); }
   });
 
-  if (cfg.app === "hub") { track("app_open", { surface: surface(), auth_state: authState() }); }
+  if (cfg.app === "hub") { track("app_open", { surface: surface() }); }
   privacyPage();
 })();

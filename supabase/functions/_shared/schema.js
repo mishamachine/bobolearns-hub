@@ -7,12 +7,12 @@ export const SCHEMA = {
   platforms: ['web', 'ios', 'android'],
   surface: { re: '^[a-z][a-z0-9_-]{0,31}$' },
   events: {
-    app_open: { props: { surface: { re: '^[a-z][a-z0-9_-]{0,31}$' }, auth_state: { enum: ['guest', 'member'] } } },
+    app_open: { props: { surface: { re: '^[a-z][a-z0-9_-]{0,31}$' } } },
     guest_continue: { props: { surface: { re: '^[a-z][a-z0-9_-]{0,31}$' } } },
     guest_popup_seen: { props: { surface: { re: '^[a-z][a-z0-9_-]{0,31}$' } } },
     signup_start: { props: { method: { enum: ['email', 'google', 'apple'] }, surface: { re: '^[a-z][a-z0-9_-]{0,31}$' } } },
-    // The guest ID only. No user_id, ever. auth_state must be "guest".
-    sign_up: { props: { auth_state: { enum: ['guest'] }, method: { enum: ['email', 'google', 'apple'] }, surface: { re: '^[a-z][a-z0-9_-]{0,31}$' } }, required: { auth_state: 'guest' } },
+    // The guest ID only. No user_id, ever.
+    sign_up: { props: { method: { enum: ['email', 'google', 'apple'] }, surface: { re: '^[a-z][a-z0-9_-]{0,31}$' } } },
     sign_in: { props: { method: { enum: ['email', 'google', 'apple'] }, surface: { re: '^[a-z][a-z0-9_-]{0,31}$' } } },
     guest_progress_moved: { props: { surface: { re: '^[a-z][a-z0-9_-]{0,31}$' } } },
     // Hub value event: a click on a site card. The slug is a code from sites.json, not text a visitor types.

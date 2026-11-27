@@ -9,7 +9,7 @@
 --  * No time of day is stored: each event has a calendar day only (UTC). Rows for sign_up, sign_in, signup_start and
 --    guest_progress_moved (events at or next to account creation or linking) store ONLY the event name, the app, the day, the
 --    page area (props.surface) and fresh random ids. The device ID, session ID, platform, app version, source, referrer,
---    country and every other prop (including method and auth_state) are dropped, so they cannot be matched to the same
+--    country and every other prop (including method) are dropped, so they cannot be matched to the same
 --    device's other rows. They are counted as events, never per ID; sign-ups are not reported by source or by method.
 --    The row id is a random uuid, not a sequence, so insertion order is not kept.
 --  * The dashboard read hides small cells: counts of 1 to 4 show as "<5" and small sources fold into "other".
@@ -134,6 +134,7 @@ grant execute on function public.analytics_ingest(jsonb) to service_role;
 
 -- Nightly job, written as a file and NOT scheduled. Idempotent: running a day twice gives the same rows.
 -- Usage (by an operator or a scheduler the owner approves): select analytics.aggregate_day(current_date - 1);
+-- Every stored device ID is a guest ID (a signed-in browser sends no events under it; no auth_state is stored), so guest_* equal the totals.
 -- Users are counted per device ID from every event except sign_up, sign_in, signup_start and guest_progress_moved (those rows
 -- carry random ids), so those are counted as events: nothing at account creation is matched to a device.
 create or replace function analytics.aggregate_day(p_day date) returns void
@@ -152,17 +153,14 @@ begin
   ), per as (
     select app, anon_id,
       bool_or(day = p_day) as in1,
-      bool_or(day > p_day - 7) as in7,
-      bool_or(day = p_day and props ->> 'auth_state' = 'member') as m1,
-      bool_or(day > p_day - 7 and props ->> 'auth_state' = 'member') as m7,
-      bool_or(props ->> 'auth_state' = 'member') as m30
+      bool_or(day > p_day - 7) as in7
     from win where event not in ('sign_up', 'sign_in', 'signup_start', 'guest_progress_moved') group by app, anon_id
   ), users as (
     select app,
       count(*) filter (where in1) as dau, count(*) filter (where in7) as wau, count(*) as mau,
-      count(*) filter (where in1 and not m1) as guest_dau,
-      count(*) filter (where in7 and not m7) as guest_wau,
-      count(*) filter (where not m30) as guest_mau
+      count(*) filter (where in1) as guest_dau,
+      count(*) filter (where in7) as guest_wau,
+      count(*) as guest_mau
     from per group by app
   ), ev as (
     select app,

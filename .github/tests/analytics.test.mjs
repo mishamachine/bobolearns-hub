@@ -16,7 +16,7 @@ const { createEventsHandler, createDashboardHandler, secretsEqual, readCapped } 
 
 const A = '3b1f9c2e-7a54-4d0b-9e21-5c8d6f0a1b23';
 const S = '9d2c4e61-0f3a-4b7d-8a15-2e6b7c9d0e41';
-const env = (over = {}) => ({ app: 'hub', anon_id: A, session_id: S, platform: 'web', events: [{ event: 'app_open', props: { surface: 'home', auth_state: 'guest' } }], ...over });
+const env = (over = {}) => ({ app: 'hub', anon_id: A, session_id: S, platform: 'web', events: [{ event: 'app_open', props: { surface: 'home' } }], ...over });
 
 // ---------- the browser module, run in a sandbox ----------
 function loadClient({ enabled = true, dnt = false, cookie = '', search = '', referrer = '', path: pathname = '/', storage = {}, app = 'hub', nodes = null, ids = {} } = {}) {
@@ -44,7 +44,7 @@ test('client schema equals the server allow-list', () => {
 test('flag off (the shipped default): nothing is sent and no ID is created', async () => {
   assert.equal(JSON.parse(JSON.stringify(vm.runInNewContext('(' + read('assets/js/config.js').replace('window.BOBO_CONFIG =', '') .replace(/;\s*$/, '') + ')', { window: {} }))).analytics.enabled, false);
   const c = loadClient({ enabled: false });
-  assert.equal(c.api.track('app_open', { surface: 'home', auth_state: 'guest' }), false);
+  assert.equal(c.api.track('app_open', { surface: 'home' }), false);
   assert.equal(c.sent.length, 0);
   assert.equal(c.local._m.size, 0, 'no ID written');
 });
@@ -58,13 +58,13 @@ test('flag on: app_open fires once with a random v4 UUID, stable per device', as
   const again = loadClient({ storage: { 'bb.anon.v1': p.anon_id } });
   assert.equal((await again.payloads())[0].anon_id, p.anon_id, 'same device, same ID');
   assert.equal(p.platform, 'web');
-  assert.deepEqual(p.events, [{ event: 'app_open', props: { surface: 'home', auth_state: 'guest' } }]);
+  assert.deepEqual(p.events, [{ event: 'app_open', props: { surface: 'home' } }]);
 });
 
 test('the payload never carries a user ID, email or any account link; a signed-in browser sends no guest events', async () => {
   const guest = (await loadClient({}).payloads())[0];
   const member = loadClient({ cookie: 'sb-ywcrzkvwamjchjjkfrve-auth-token.0=SECRETVALUE' }); // no-join rule (c): see no-join.test.mjs T5
-  assert.equal(guest.events[0].props.auth_state, 'guest');
+  assert.deepEqual(guest.events[0].props, { surface: 'home' }, 'no auth_state is sent');
   assert.equal(member.sent.length, 0, 'signed-in app_open is not sent under a guest ID');
   const text = JSON.stringify(guest);
   for (const bad of ['user_id', 'userId', 'email', 'SECRETVALUE', 'account_linked', 'identify']) assert.ok(!text.includes(bad), bad);
@@ -93,12 +93,12 @@ test('guest name: deterministic, same shape, known vector', () => {
   assert.equal(api.guestName(A), 'Guest Jolly-Quokka-5243');
 });
 
-test('client cleanProps: allow-list only, no free text, sign_up must be guest', () => {
+test('client cleanProps: allow-list only, no free text, auth_state is not an allowed prop', () => {
   const { api } = loadClient({ enabled: false });
   assert.equal(api.cleanProps('app_open', { surface: 'home', email: 'a@b.c' }), null);
   assert.equal(api.cleanProps('app_open', { surface: 'Hello there, free text!' }), null);
-  assert.equal(api.cleanProps('sign_up', { auth_state: 'member', method: 'email' }), null);
-  assert.deepEqual(JSON.parse(JSON.stringify(api.cleanProps('sign_up', { auth_state: 'guest', method: 'google' }))), { auth_state: 'guest', method: 'google' });
+  assert.equal(api.cleanProps('sign_up', { auth_state: 'guest', method: 'email' }), null);
+  assert.deepEqual(JSON.parse(JSON.stringify(api.cleanProps('sign_up', { method: 'google' }))), { method: 'google' });
   assert.equal(api.cleanProps('not_an_event', {}), null);
 });
 
@@ -143,7 +143,7 @@ test('a good batch becomes rows with no user_id and no IP; country comes from th
 });
 
 test('envelope fields that would link or identify are ignored, never stored', () => {
-  const out = validateBatch(env({ user_id: 'u-123', email: 'a@b.c', ip: '1.2.3.4', events: [{ event: 'sign_up', props: { auth_state: 'guest', method: 'email' }, user_id: 'u-123' }] }), null);
+  const out = validateBatch(env({ user_id: 'u-123', email: 'a@b.c', ip: '1.2.3.4', events: [{ event: 'sign_up', props: { method: 'email' }, user_id: 'u-123' }] }), null);
   assert.equal(out.rows.length, 1);
   assert.ok(!JSON.stringify(out.rows).match(/u-123|a@b\.c|1\.2\.3\.4/));
 });
@@ -182,13 +182,13 @@ test('validation: wrong app, apps without a device ID, bad IDs, bounds, unknown 
     { event: 'app_open', props: { surface: 'home' } },
     { event: 'drop_table', props: {} },
     { event: 'app_open', props: { surface: 'home', email: 'a@b.c' } },
-    { event: 'sign_up', props: { auth_state: 'member' } },
+    { event: 'sign_up', props: { method: 'sms' } },
     { event: 'sign_up', props: { method: 'email' } },
     { event: 'site_open', props: { slug: 'chess' } },
     { event: 'app_open', props: { surface: { nested: 1 } } },
   ] }), null);
-  assert.equal(r.rows.length, 2);
-  assert.equal(r.rejected, 5);
+  assert.equal(r.rows.length, 3);
+  assert.equal(r.rejected, 4);
   assert.equal(validateBatch(env({ app: 'chess', events: [{ event: 'site_open', props: { slug: 'x' } }] }), null).error, 'no_valid_events', 'hub-only event');
 });
 
@@ -335,12 +335,12 @@ const FULL = env({ app_version: '1.2.3', source: { utm_source: 'facebook', utm_m
 
 test('account-creation events keep only event, app, page area and fresh random IDs; nothing else survives', () => {
   const out = validateBatch({ ...FULL, events: [
-    { event: 'app_open', props: { surface: 'home', auth_state: 'guest' } },
+    { event: 'app_open', props: { surface: 'home' } },
     { event: 'signup_start', props: { method: 'google', surface: 'login' } },
-    { event: 'sign_up', props: { auth_state: 'guest', method: 'email', surface: 'login' } },
+    { event: 'sign_up', props: { method: 'email', surface: 'login' } },
     { event: 'sign_in', props: { method: 'apple', surface: 'login' } },
     { event: 'guest_progress_moved', props: { surface: 'login' } },
-    { event: 'sign_up', props: { auth_state: 'guest', method: 'email' } },
+    { event: 'sign_up', props: { method: 'email' } },
   ] }, 'US');
   const normal = out.rows.find((r) => r.event === 'app_open');
   assert.equal(normal.anon_id, A);
@@ -467,13 +467,13 @@ test('migration: every function pins search_path; bounds; 14-month retention; no
 
 // ---------- privacy page ----------
 // The final privacy wording lives HERE, once. A change in wording is one edit to this list and one edit to privacy/index.html.
-const PRIVACY_HEADING = 'Guest ID and usage counts';
+const PRIVACY_HEADING = 'Guest activity';
 const PRIVACY_OFF_LINE = 'Usage counts are currently off.';
 const PRIVACY_PARAGRAPHS = [
-  `When usage counts are on, our server records simple events on bobolearns.com, such as opening a page, starting sign-up or signing in, so we can see what is useful. Most events have a random ID for this browser, the date, the page area, whether you were signed in, where the visit came from (for example a search engine or a link we posted) and your country. Sign-up, sign-in and progress-moving events instead get a separate one-off ID and keep only the date and page area, so they aren't stored with your guest ID.`,
-  `The random ID, and a made-up name made from it (for example "Guest Brave-Otter-4821"), are kept in this browser's local storage. They are not made from your IP address and mean nothing outside our tools.`,
+  `When usage counts are on, our server records simple events on bobolearns.com, such as opening a page, opening one of our sites from the home page, starting sign-up or signing in, so we can see what is useful. Most events keep: a random ID for this browser; a random ID for this visit; the date (never the time of day); the page area, and for a click on a site card, which site it was; the type of device (web, iOS or Android) and our app version where we set one; your country; and where the visit came from, meaning the campaign tags in the link you followed (utm source, medium and campaign) and the domain of the website that sent you (the domain only, never the full address). Sign-up, sign-in and progress-moving events instead keep only the date, the page area and fresh random IDs, so they aren't stored with your guest ID.`,
+  `The random ID is kept in this browser's local storage, and the visit ID and where-from details in this tab's session storage. A made-up name worked out from the random ID (for example "Guest Brave-Otter-4821") is shown below on this device only; it is not sent to us. None of these are made from your IP address, and they mean nothing outside our tools.`,
   `We use your IP address only to work out your country and, briefly, to stop abuse. We don't store it in our analytics or guest IDs. Our hosting and database providers keep standard security logs, described above.`,
-  `Your guest ID isn't linked to your account.`,
+  `If you later create an account or sign in, we don't link your guest activity to your account, and we don't build or use any tool that does. When this site sees that you are signed in, it deletes the guest ID from this browser and stops sending events under it. We don't send guest IDs to Google Analytics or anyone else; events go only to our own database at Supabase.`,
   `Event records, including the random ID, are kept for 14 months. Daily totals that contain no IDs may be kept longer.`,
   `You can turn usage counts off on this device or reset your guest ID with the controls below, or clear this site's data in your browser. If your browser sends Do Not Track or Global Privacy Control, we don't count your visits.`,
 ];
@@ -567,10 +567,10 @@ test('migration in PGlite: one-off rows are stripped, users exclude them, small 
   const SS = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   const mk = (anon, event, props = {}, extra = {}) => ({ app: 'hub', event, anon_id: anon, session_id: SS, platform: 'web', app_version: '1.0', country: 'US', utm_source: 'facebook', utm_medium: 'social', utm_campaign: 'c', referrer_domain: 'x.com', props, ...extra });
   const rows = [];
-  for (let i = 0; i < 12; i++) rows.push(mk(U[i], 'app_open', { surface: 'home', auth_state: 'guest' }, i < 8 ? {} : { utm_source: null, referrer_domain: null }));
+  for (let i = 0; i < 12; i++) rows.push(mk(U[i], 'app_open', { surface: 'home' }, i < 8 ? {} : { utm_source: null, referrer_domain: null }));
   for (let i = 0; i < 12; i++) rows.push(mk(U[i], 'site_open', { slug: 'chess' }));
   for (let i = 0; i < 3; i++) rows.push(mk(U[i], 'signup_start', { method: 'google', surface: 'login' }));
-  rows.push(mk(U[0], 'sign_up', { auth_state: 'guest', method: 'email', surface: 'login' }), mk(U[1], 'sign_up', { auth_state: 'guest', method: 'google', surface: 'login' }));
+  rows.push(mk(U[0], 'sign_up', { method: 'email', surface: 'login' }), mk(U[1], 'sign_up', { method: 'google', surface: 'login' }));
   rows.push(mk(U[2], 'sign_in', { method: 'email', surface: 'login' }), mk(U[3], 'guest_progress_moved', { surface: 'login' }));
   rows.push(mk(U[11], 'app_open', { surface: 'home' }, { utm_source: 'tiny', referrer_domain: null })); // a source with 1 visit
   await db.query('select public.analytics_ingest($1::jsonb)', [JSON.stringify(rows)]);

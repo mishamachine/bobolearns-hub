@@ -9,8 +9,8 @@ const DEV_ORIGINS = [/^http:\/\/localhost(:\d+)?$/, /^http:\/\/127\.0\.0\.1(:\d+
 export const originAllowed = (origin, allowDev = false) => !!origin && (PROD_ORIGIN.test(origin) || (allowDev && DEV_ORIGINS.some((r) => r.test(origin))));
 
 // Events at or next to account creation or linking. Their rows store ONLY the event name, the app, the day, the page area
-// (props.surface) and fresh random IDs: no device ID, session ID, platform, app version, source, referrer, country, method
-// or auth_state. So they cannot be matched to the same device's other rows. They are counted as events, never per ID.
+// (props.surface) and fresh random IDs: no device ID, session ID, platform, app version, source, referrer, country, method.
+// So they cannot be matched to the same device's other rows. They are counted as events, never per ID.
 export const ONE_OFF_ID_EVENTS = ['signup_start', 'sign_up', 'sign_in', 'guest_progress_moved'];
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;

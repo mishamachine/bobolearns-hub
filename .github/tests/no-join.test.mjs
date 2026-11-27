@@ -39,7 +39,7 @@ const ROW_ID = ['id']; // random uuid, not a sequence
 const CBO_ACCEPTED = ['session_id', 'platform', 'app_version', 'country', 'utm_source', 'utm_medium', 'utm_campaign', 'referrer_domain'];
 const FORBIDDEN_WORDS = ['user', 'email', 'ip', 'account', 'push', 'token', 'fingerprint', 'device', 'hash', 'phone', 'name', 'member', 'profile', 'lat', 'lng'];
 const FORBIDDEN = { test: (c) => c.split('_').some((w) => FORBIDDEN_WORDS.includes(w)) };
-const PROP_ALLOWED = ['surface', 'auth_state', 'method', 'slug'];
+const PROP_ALLOWED = ['surface', 'method', 'slug'];
 
 test('T1 column allowlist: guest event table has exactly the rule-(a) columns plus the CBO-accepted ones', () => {
   assert.ok(events && events.cols.length > 5, 'parsed analytics.events');
@@ -160,7 +160,7 @@ test('T5 client: after a simulated sign-in the old guest ID is deleted and never
   assert.match(old, UUID4);
   // same browser, same storage, now signed in (the session cookie appears)
   const after = loadClient({ cookie: COOKIE, storage: { 'bb.anon.v1': old } });
-  after.api.track('app_open', { surface: 'home', auth_state: 'member' });
+  after.api.track('app_open', { surface: 'home' });
   after.api.track('guest_continue', { surface: 'home' });
   after.api.track('site_open', { slug: 'chess' });
   after.api.track('sign_in', { method: 'email', surface: 'login' });
@@ -178,7 +178,7 @@ test('T5 client: account-creation events never carry the stored guest ID, and th
   const [open] = await c.requests();
   const guestId = open.body.anon_id;
   c.api.track('signup_start', { method: 'email', surface: 'login' });
-  c.api.track('sign_up', { auth_state: 'guest', method: 'email', surface: 'login' });
+  c.api.track('sign_up', { method: 'email', surface: 'login' });
   c.api.track('guest_progress_moved', { surface: 'login' });
   const reqs = (await c.requests()).slice(1);
   assert.equal(reqs.length, 3);
@@ -197,7 +197,7 @@ test('T5 client: account-creation events never carry the stored guest ID, and th
 test('T5 client: no request carries both a session token and a guest ID', async () => {
   for (const cookie of ['', COOKIE]) {
     const c = loadClient({ cookie });
-    for (const [e, p] of [['app_open', { surface: 'home', auth_state: 'guest' }], ['sign_in', { method: 'google', surface: 'login' }], ['sign_up', { auth_state: 'guest', method: 'email', surface: 'login' }], ['site_open', { slug: 'chess' }]]) c.api.track(e, p);
+    for (const [e, p] of [['app_open', { surface: 'home' }], ['sign_in', { method: 'google', surface: 'login' }], ['sign_up', { method: 'email', surface: 'login' }], ['site_open', { slug: 'chess' }]]) c.api.track(e, p);
     for (const r of await c.requests()) {
       assert.ok(!r.text.includes(TOKEN) && !r.url.includes(TOKEN), 'the session token is never in a request');
       assert.ok(!/authorization|bearer|access_token|refresh_token|jwt/i.test(r.text + r.url));
