@@ -73,6 +73,20 @@
       }
     },
     {
+      "slug": "omg",
+      "name": "OMG: Scripture Study",
+      "emoji": "📖",
+      "accent": "#2d6cdf",
+      "status": "live",
+      "url": "https://omg.bobolearns.com",
+      "tagline": "Read the Quran, Torah and Bible side by side. Free, offline, no account.",
+      "tags": [
+        "Quran",
+        "Torah",
+        "Bible"
+      ]
+    },
+    {
       "slug": "next",
       "name": "What's next?",
       "emoji": "✨",
