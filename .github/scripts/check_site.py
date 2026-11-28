@@ -16,6 +16,8 @@ Run from the repo root: python3 .github/scripts/check_site.py
 import json
 import pathlib
 import re
+import shutil
+import subprocess
 import sys
 import xml.etree.ElementTree as ET
 from urllib.parse import urlsplit
@@ -138,6 +140,18 @@ def check_contact():
             errors.append(f"{f.relative_to(ROOT)}: contains the retired contact address; use machinemisha@gmail.com")
 
 
+def check_analytics_tests():
+    """Runs the analytics tests (node:test). CI already installs Node, so this needs no workflow change."""
+    node = shutil.which("node")
+    if node is None:
+        errors.append("analytics tests: node is not installed")
+        return
+    for name in ("analytics", "no-join"):
+        r = subprocess.run([node, "--test", f".github/tests/{name}.test.mjs"], cwd=ROOT, capture_output=True, text=True)
+        if r.returncode != 0:
+            errors.append(f"{name} tests failed:\n" + (r.stdout + r.stderr)[-3000:])
+
+
 GUEST_PROGRESS_SENTENCE = (
     "In Woof, if you don't sign in, your lesson progress and study time are saved in your browser "
     "on this device only. They aren't sent to us, and clearing your browser's data for woof.bobolearns.com erases them. "
@@ -162,6 +176,7 @@ def main():
     check_sites_json()
     check_sitemap()
     check_contact()
+    check_analytics_tests()
     check_privacy_copy()
     if errors:
         print(f"{len(errors)} problem(s) found:")

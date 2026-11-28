@@ -9,5 +9,8 @@ window.BOBO_CONFIG = {
   contactEmail: "machinemisha@gmail.com",
   // Flip apple to true once Sign in with Apple is configured in Supabase (needs an Apple Developer account).
   providers: { google: true, apple: false },
+  // First-party usage counts (guest events). OFF until the privacy copy is final and the server side is applied.
+  // Nothing is sent, and no ID is created, while enabled is false.
+  analytics: { enabled: false, app: "hub", endpoint: "https://ywcrzkvwamjchjjkfrve.supabase.co/functions/v1/events" },
   creator: { name: "Babar Ali", url: "https://babarali.com" }
 };
