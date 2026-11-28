@@ -9,7 +9,7 @@ State: code and SQL only. Nothing is applied, deployed or switched on. `assets/j
 - No time of day is stored: every raw event has a calendar day (UTC) only. The row id is a random uuid, not a sequence. (Physical row order inside Postgres is not controlled by this code.)
 - Events at or next to account creation or linking (`signup_start`, `sign_up`, `sign_in`, `guest_progress_moved`) store ONLY the event name, the app, the day, the page area and fresh random IDs. The device ID, session ID, platform, app version, utm tags, referrer, country and method are dropped, in the function and again in the database. They are counted as events, never per ID, so **sign-ups are not recorded by method, source or country**, only in total.
 - Country comes from the edge header. The IP is never stored by this code (the host and Supabase keep their own logs, which the privacy page discloses). Rate limiting uses a hash of the IP under a key that changes every UTC day and is held only in memory.
-- Raw events are kept 14 months (`analytics.purge_raw()`); daily aggregates (no IDs) are kept.
+- Raw events and daily aggregates (no IDs) are kept with no fixed deletion date, as the privacy page says. `analytics.purge_raw()` exists but stays unscheduled.
 - The dashboard read hides small cells: counts of 1 to 4 (sign-ups, funnel steps, top events) show as "<5", and sources with fewer than 5 visits in the window are folded into "other". Headline active-user counts are unchanged.
 - No Google, Meta or other third-party tag.
 
@@ -30,7 +30,7 @@ State: code and SQL only. Nothing is applied, deployed or switched on. `assets/j
 - Body limit 8192 bytes, refused from the declared length before reading, and the read itself stops at 8192. 20 events per request.
 
 ## Preconditions for enabling (none are done)
-1. Scheduling is a precondition: `select analytics.aggregate_day(current_date - 1);` nightly and `select analytics.purge_raw();` monthly, by a scheduler the owner approves. Without `purge_raw` the 14-month sentence on the privacy page would be untrue; without `aggregate_day` the dashboard shows nothing.
+1. Scheduling is a precondition: `select analytics.aggregate_day(current_date - 1);` nightly, by a scheduler the owner approves; without it the dashboard shows nothing. `analytics.purge_raw()` is NOT scheduled: the privacy page promises no deletion period. If a period is ever promised, schedule purge_raw in the same change.
 2. Apply the migration to the shared Supabase project.
 3. Precondition before switching the flag on: verify `cf-connecting-ip` is present on Supabase Edge (and `cf-ipcountry`). Without it every request is "no-ip", per-IP limiting is off and only a global cap of 600 requests a minute applies.
    Deploy: `supabase functions deploy events --no-verify-jwt` (the browser posts text/plain with no auth header) and `supabase functions deploy analytics-dashboard --no-verify-jwt`.

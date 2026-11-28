@@ -474,7 +474,7 @@ const PRIVACY_PARAGRAPHS = [
   `The random ID is kept in this browser's local storage, and the visit ID and where-from details in this tab's session storage. A made-up name worked out from the random ID (for example "Guest Brave-Otter-4821") is shown below on this device only; it is not sent to us. None of these are made from your IP address, and they mean nothing outside our tools.`,
   `We use your IP address only to work out your country and, briefly, to stop abuse. We don't store it in our analytics or guest IDs. Our hosting and database providers keep standard security logs, described above.`,
   `If you later create an account or sign in, we don't link your guest activity to your account, and we don't build or use any tool that does. When this site sees that you are signed in, it deletes the guest ID from this browser and stops sending events under it. We don't send guest IDs to Google Analytics or anyone else; events go only to our own database at Supabase.`,
-  `Event records, including the random ID, are kept for 14 months. Daily totals that contain no IDs may be kept longer.`,
+  `We keep event records, including the random ID, for as long as they help us improve the Services. Daily totals that contain no IDs may also be kept.`,
   `You can turn usage counts off on this device or reset your guest ID with the controls below, or clear this site's data in your browser. If your browser sends Do Not Track or Global Privacy Control, we don't count your visits.`,
 ];
 const sectionOf = (html) => html.slice(html.indexOf('<section id="guest-id">'), html.indexOf('</section>', html.indexOf('<section id="guest-id">')));

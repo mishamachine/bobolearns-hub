@@ -216,19 +216,18 @@ test('T5 client: no request carries both a session token and a guest ID', async 
 });
 
 // ---------- T6 retention ----------
-test('T6 retention: purge_raw deletes events older than N months, N equals the privacy page, scheduling is a recorded precondition', () => {
+test('T6 retention: the privacy page promises no deletion period, purge_raw stays unscheduled, and the README says so', () => {
   const sql = stripSql(MIGRATION);
   const fn = sql.slice(sql.indexOf('create or replace function analytics.purge_raw'), sql.indexOf('revoke all on function analytics.purge_raw'));
-  const n = Number(fn.match(/interval '(\d+) months'/)[1]);
-  assert.ok(/delete from analytics\.events where day </.test(fn), 'deletes raw events by day');
-  assert.ok(n >= 1 && n <= 24);
+  assert.ok(/delete from analytics\.events where day </.test(fn), 'the purge tool still exists (owner-run only)');
   const privacy = read('privacy/index.html');
-  assert.ok(privacy.includes(`kept for ${n} months`), `the privacy page says ${n} months`);
-  assert.ok(privacy.includes(`Usage-count records: ${n} months.`));
+  assert.ok(privacy.includes('We keep event records, including the random ID, for as long as they help us improve the Services. Daily totals that contain no IDs may also be kept.'));
+  assert.ok(privacy.includes('Usage-count records: kept while they help us improve the Services; no fixed deletion date.'));
+  assert.ok(!/kept for \d+ months/.test(privacy) && !/Usage-count records: \d+ months/.test(privacy), 'no fixed period is promised, so no unscheduled purge can make the page untrue');
   assert.ok(/revoke all on function analytics\.purge_raw\(\) from public, anon, authenticated/.test(sql));
   const readme = read('supabase/analytics/README.md');
-  assert.ok(/purge_raw/.test(readme) && /precondition/i.test(readme), 'README lists scheduling purge_raw as a precondition for enabling');
-  assert.ok(!/cron\.schedule/i.test(sql), 'this PR schedules nothing: the operator step stays Babar\'s go');
+  assert.ok(/purge_raw\(\)` is NOT scheduled/.test(readme), 'README records that purge_raw is not scheduled');
+  assert.ok(!/cron\.schedule/i.test(sql), 'this PR schedules nothing: the operator step stays the owner\'s go');
 });
 
 test('T6 in a real Postgres engine: events older than N months are gone, newer stay', { skip: !process.env.PGLITE_DIR && 'set PGLITE_DIR to run' }, async () => {

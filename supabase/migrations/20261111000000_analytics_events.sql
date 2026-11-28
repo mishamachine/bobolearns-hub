@@ -13,7 +13,8 @@
 --    device's other rows. They are counted as events, never per ID; sign-ups are not reported by source or by method.
 --    The row id is a random uuid, not a sequence, so insertion order is not kept.
 --  * The dashboard read hides small cells: counts of 1 to 4 show as "<5" and small sources fold into "other".
---  * Raw events are kept 14 months (analytics.purge_raw); daily aggregates are kept.
+--  * Raw events and daily aggregates are kept with no fixed deletion date.
+--    analytics.purge_raw exists but is NOT scheduled and is not a precondition for enabling.
 
 create schema if not exists analytics;
 revoke all on schema analytics from public, anon, authenticated;
@@ -202,7 +203,8 @@ begin
 end $$;
 revoke all on function analytics.aggregate_day(date) from public, anon, authenticated;
 
--- Retention: raw events are kept 14 months; aggregates are kept. Not scheduled (scheduling it is a precondition for enabling).
+-- Retention tool only: deletes raw events older than 14 months if an owner ever runs it. Not scheduled, and not a precondition
+-- for enabling: the privacy page states no fixed deletion date. Account deletion is handled separately.
 create or replace function analytics.purge_raw() returns int
 language plpgsql set search_path = '' as $$
 declare v_n int;
