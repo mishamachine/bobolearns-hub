@@ -135,6 +135,7 @@ grant execute on function public.analytics_ingest(jsonb) to service_role;
 
 -- Nightly job, written as a file and NOT scheduled. Idempotent: running a day twice gives the same rows.
 -- Usage (by an operator or a scheduler the owner approves): select analytics.aggregate_day(current_date - 1);
+-- This depends on the client never sending a device ID for a signed-in member; any future non-hub client must keep that invariant, or these duplicate columns should be dropped.
 -- Every stored device ID is a guest ID (a signed-in browser sends no events under it; no auth_state is stored), so guest_* equal the totals.
 -- Users are counted per device ID from every event except sign_up, sign_in, signup_start and guest_progress_moved (those rows
 -- carry random ids), so those are counted as events: nothing at account creation is matched to a device.

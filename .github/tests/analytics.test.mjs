@@ -470,7 +470,7 @@ test('migration: every function pins search_path; bounds; 14-month retention; no
 const PRIVACY_HEADING = 'Guest activity';
 const PRIVACY_OFF_LINE = 'Usage counts are currently off.';
 const PRIVACY_PARAGRAPHS = [
-  `When usage counts are on, our server records simple events on bobolearns.com, such as opening a page, opening one of our sites from the home page, starting sign-up or signing in, so we can see what is useful. Most events keep: a random ID for this browser; a random ID for this visit; the date (never the time of day); the page area, and for a click on a site card, which site it was; the type of device (web, iOS or Android) and our app version where we set one; your country; and where the visit came from, meaning the campaign tags in the link you followed (utm source, medium and campaign) and the domain of the website that sent you (the domain only, never the full address). Sign-up, sign-in and progress-moving events instead keep only the date, the page area and fresh random IDs, so they aren't stored with your guest ID.`,
+  `When usage counts are on, our server records simple events on bobolearns.com, such as opening a page, opening one of our sites from the home page, starting sign-up or signing in, so we can see what is useful. Most events keep: a random ID for this browser; a random ID for this visit; the date (never the time of day); the page area, and for a click on a site card, which site it was; the type of device (web, iOS or Android) and our app version where we set one; your country; and where the visit came from, meaning the campaign tags in the link you followed (utm source, medium and campaign) and the domain of the website that sent you (the domain only, never the full address). Starting sign-up, sign-up, sign-in and progress-moving events instead keep only the date, the page area and fresh random IDs, so they aren't stored with your guest ID.`,
   `The random ID is kept in this browser's local storage, and the visit ID and where-from details in this tab's session storage. A made-up name worked out from the random ID (for example "Guest Brave-Otter-4821") is shown below on this device only; it is not sent to us. None of these are made from your IP address, and they mean nothing outside our tools.`,
   `We use your IP address only to work out your country and, briefly, to stop abuse. We don't store it in our analytics or guest IDs. Our hosting and database providers keep standard security logs, described above.`,
   `If you later create an account or sign in, we don't link your guest activity to your account, and we don't build or use any tool that does. When this site sees that you are signed in, it deletes the guest ID from this browser and stops sending events under it. We don't send guest IDs to Google Analytics or anyone else; events go only to our own database at Supabase.`,
@@ -614,4 +614,21 @@ test('requests with no IP skip the per-IP table and share a high global cap', as
   assert.equal(await lim.limited('203.0.113.9'), false, 'a real address is unaffected');
   t += 61_000;
   assert.equal(await lim.limited('no-ip'), false, 'the window slides');
+});
+
+test('a signed-in browser loses its guest ID on load, even when counts are off', () => {
+  const key = 'bb.anon.v1';
+  const cookie = 'sb-ywcrzkvwamjchjjkfrve-auth-token.0=x';
+  for (const opts of [{ enabled: false }, { dnt: true }, { storage: { 'bb.analytics.off': '1' } }]) {
+    const c = loadClient({ ...opts, cookie, storage: { ...(opts.storage || {}), [key]: 'old-id' } });
+    assert.equal(c.local.getItem(key), null, JSON.stringify(opts));
+    assert.equal(c.sent.length, 0);
+  }
+});
+
+test('.htaccess returns 404 for repo internals, including docs and .github', () => {
+  const rule = read('.htaccess').split('\n').find((l) => l.startsWith('RedirectMatch 404'));
+  const re = new RegExp(rule.split(' ')[2]);
+  for (const p of ['/docs/privacy/no-join-rule.md', '/.github/tests/analytics.test.mjs', '/supabase/x.sql', '/.git/config', '/README.md']) assert.ok(re.test(p), p);
+  assert.ok(!re.test('/privacy/'));
 });

@@ -212,6 +212,8 @@
     if (a) { track("site_open", { slug: a.getAttribute("data-track-site") }); }
   });
 
+  // Delete the guest ID whenever a signed-in member is seen, even when counts are off (privacy page: "it deletes the guest ID").
+  if (authState() === "member") { reset(); }
   if (cfg.app === "hub") { track("app_open", { surface: surface() }); }
   privacyPage();
 })();

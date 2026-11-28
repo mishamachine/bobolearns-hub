@@ -9,7 +9,7 @@ RewriteCond %{HTTPS} !=on
 RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
 # Don't serve repo internals (also keeps /supabase SQL and the README private)
-RedirectMatch 404 ^/(\.git|supabase|README\.md|\.gitignore)
+RedirectMatch 404 ^/(\.git|\.github|docs|supabase|README\.md|\.gitignore)
 
 <IfModule mod_headers.c>
   Header always set X-Content-Type-Options "nosniff"
